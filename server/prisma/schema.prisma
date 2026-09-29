@@ -13,3 +13,103 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ResourceStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
+}
+
+enum ReportStatus {
+  PENDING
+  DISMISSED
+  ACTION_TAKEN
+}
+
+enum TransactionType {
+  EARN
+  SPEND
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  credits      Int      @default(5)
+  role         UserRole @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  resources       Resource[]
+  transactions    Transaction[]
+  likes           Like[]
+  reportsFiled    Report[] @relation("ReporterRelation")
+  reportsReviewed Report[] @relation("ReviewerRelation")
+
+  @@map("users")
+}
+
+model Resource {
+  id          String         @id @default(uuid())
+  uploadId    String         @unique @map("upload_id")
+  uploaderId  String         @map("uploader_id")
+  uploader    User           @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  type        String
+  sizeBytes   BigInt         @map("size_bytes")
+  objectKey   String         @map("object_key")
+  status      ResourceStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  transactions Transaction[]
+  likes        Like[]
+  reports      Report[]
+
+  @@index([status, type, createdAt])
+  @@map("resources")
+}
+
+model Transaction {
+  id         String          @id @default(uuid())
+  userId     String          @map("user_id")
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String?         @map("resource_id")
+  resource   Resource?       @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  type       TransactionType
+  amount     Int
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@map("transactions")
+}
+
+model Like {
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String   @map("resource_id")
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([userId, resourceId])
+  @@map("likes")
+}
+
+model Report {
+  id         String       @id @default(uuid())
+  reporterId String       @map("reporter_id")
+  reporter   User         @relation("ReporterRelation", fields: [reporterId], references: [id], onDelete: Cascade)
+  resourceId String       @map("resource_id")
+  resource   Resource     @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  reason     String
+  status     ReportStatus @default(PENDING)
+  reviewedBy String?      @map("reviewed_by")
+  reviewer   User?        @relation("ReviewerRelation", fields: [reviewedBy], references: [id])
+  reviewedAt DateTime?    @map("reviewed_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([reporterId, resourceId])
+  @@map("reports")
+}

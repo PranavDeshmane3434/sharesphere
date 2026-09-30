@@ -1,0 +1,67 @@
+const crypto = require('crypto');
+const prisma = require('../prisma/client');
+const storage = require('./storage.service');
+const creditService = require('./credit.service');
+const { UPLOAD_REWARD, MAX_FILE_SIZE_BYTES } = require('../config/constants');
+
+async function createUploadUrl(userId, { filename, contentType, sizeBytes, type }) {
+  const uploadId = crypto.randomUUID();
+  const objectKey = storage.buildObjectKey(userId, uploadId, filename);
+  const presignedPutUrl = await storage.getPresignedPutUrl(objectKey, contentType);
+
+  return { uploadId, objectKey, presignedPutUrl, sizeBytes, type };
+}
+
+async function confirmUpload(userId, { uploadId, objectKey, title, description, type }) {
+  // Ownership check: the object key must belong to this user + this uploadId
+  const expectedPrefix = `uploads/${userId}/${uploadId}/`;
+  if (!objectKey.startsWith(expectedPrefix)) {
+    const err = new Error('Object key does not match user/upload');
+    err.status = 403;
+    throw err;
+  }
+
+  // Verify the file actually exists in R2, and trust R2's size, not the client's
+  const head = await storage.headObject(objectKey);
+  if (!head.exists) {
+    const err = new Error('File not found in storage — upload may have failed');
+    err.status = 400;
+    throw err;
+  }
+  if (head.sizeBytes > MAX_FILE_SIZE_BYTES) {
+    const err = new Error('File exceeds maximum allowed size');
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const resource = await prisma.$transaction(async (tx) => {
+      const created = await tx.resource.create({
+        data: {
+          uploadId,
+          uploaderId: userId,
+          title,
+          description,
+          type,
+          sizeBytes: head.sizeBytes,
+          objectKey,
+        },
+      });
+
+      await creditService.awardUploadCredits(tx, userId, created.id, UPLOAD_REWARD);
+
+      return created;
+    });
+
+    return { resource, alreadyConfirmed: false };
+  } catch (err) {
+    // Unique constraint on upload_id means this was already confirmed — idempotent no-op
+    if (err.code === 'P2002' && err.meta?.target?.includes('upload_id')) {
+      const existing = await prisma.resource.findUnique({ where: { uploadId } });
+      return { resource: existing, alreadyConfirmed: true };
+    }
+    throw err;
+  }
+}
+
+module.exports = { createUploadUrl, confirmUpload };

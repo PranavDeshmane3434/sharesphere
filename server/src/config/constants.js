@@ -1,0 +1,6 @@
+module.exports = {
+  UPLOAD_REWARD: 5,
+  DOWNLOAD_COST: 2,
+  MAX_FILE_SIZE_BYTES: 25 * 1024 * 1024,
+  ALLOWED_TYPES: ['PDF', 'PPT', 'PPTX', 'DOC', 'DOCX', 'TXT'],
+};

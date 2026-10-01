@@ -3,6 +3,25 @@ const prisma = require('../prisma/client');
 const storage = require('./storage.service');
 const creditService = require('./credit.service');
 const { UPLOAD_REWARD, MAX_FILE_SIZE_BYTES } = require('../config/constants');
+const { DOWNLOAD_COST } = require('../config/constants');
+
+async function downloadResource(userId, resourceId) {
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+
+  if (!resource || resource.status !== 'ACTIVE') {
+    const err = new Error('Resource not found');
+    err.status = 404;
+    throw err;
+  }
+
+  // Deduct credits — locked, atomic, commits before we touch storage
+  await creditService.deductDownloadCredits(userId, resourceId, DOWNLOAD_COST);
+
+  // Signed URL generated AFTER the transaction commits — never hold a DB lock during network I/O
+  const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
+
+  return { downloadUrl, title: resource.title };
+}
 
 async function createUploadUrl(userId, { filename, contentType, sizeBytes, type }) {
   const uploadId = crypto.randomUUID();
@@ -64,4 +83,4 @@ async function confirmUpload(userId, { uploadId, objectKey, title, description, 
   }
 }
 
-module.exports = { createUploadUrl, confirmUpload };
+module.exports = { createUploadUrl, confirmUpload, downloadResource };

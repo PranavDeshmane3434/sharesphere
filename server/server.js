@@ -15,7 +15,7 @@ const resourceRoutes = require('./src/routes/resource.routes');
 const auth = require('./src/middleware/auth');
 const requireAdmin = require('./src/middleware/requireAdmin');
 const errorHandler = require('./src/middleware/errorHandler');
-
+const adminRoutes = require('./src/routes/admin.routes');
 const app = express();
 
 app.use(cors());
@@ -24,6 +24,7 @@ app.use(express.json());
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/resources', resourceRoutes);
 
 // Temporary test routes — delete once Phase 4+ adds real protected routes

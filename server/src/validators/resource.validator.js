@@ -16,4 +16,13 @@ const confirmSchema = z.object({
   type: z.enum(ALLOWED_TYPES),
 });
 
-module.exports = { uploadUrlSchema, confirmSchema };
+const reportSchema = z.object({
+  reason: z.string().min(5).max(500),
+});
+
+const resolveReportSchema = z.object({
+  decision: z.enum(['DISMISS', 'HIDE', 'REMOVE']),
+});
+
+module.exports = { uploadUrlSchema, confirmSchema, reportSchema, resolveReportSchema };
+

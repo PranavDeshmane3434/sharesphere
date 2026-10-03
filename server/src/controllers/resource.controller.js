@@ -66,7 +66,7 @@ async function report(req, res, next) {
 async function listResources(req, res, next) {
   try {
     const query = listQuerySchema.parse(req.query);
-    const result = await resourceService.listResources(query);
+    const result = await resourceService.listResources(query, req.user.id);
     res.json(result);
   } catch (err) { next(err); }
 }

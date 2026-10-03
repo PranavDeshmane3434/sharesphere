@@ -1,0 +1,10 @@
+
+User Login
+
+email = test2@gmail.com
+password = test12345
+
+Admin Login
+
+Email:    admin@sharesphere.com
+Password: Admin@123

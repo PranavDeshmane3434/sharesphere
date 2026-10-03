@@ -1,6 +1,7 @@
 function errorHandler(err, req, res, next) {
   if (err.name === 'ZodError') {
-    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: err.errors[0]?.message || 'Invalid input' } });
+    const message = err.issues?.[0]?.message || err.errors?.[0]?.message || 'Invalid input';
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message } });
   }
   const status = err.status || 500;
   if (status === 500) console.error(err);
@@ -8,5 +9,3 @@ function errorHandler(err, req, res, next) {
 }
 
 module.exports = errorHandler;
-
-

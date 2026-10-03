@@ -1,0 +1,10 @@
+[
+  {
+    "corsRuleName": "allowLocalFrontend",
+    "allowedOrigins": ["http://localhost:5173"],
+    "allowedOperations": ["s3_put", "s3_get", "s3_head"],
+    "allowedHeaders": ["*"],
+    "exposeHeaders": [],
+    "maxAgeSeconds": 3000
+  }
+]

@@ -83,4 +83,66 @@ async function confirmUpload(userId, { uploadId, objectKey, title, description, 
   }
 }
 
-module.exports = { createUploadUrl, confirmUpload, downloadResource };
+async function listResources({ q, type, minSize, maxSize, from, to, page = 1, limit = 20 }) {
+  const offset = (page - 1) * limit;
+  const conditions = [`status = 'ACTIVE'`];
+  const params = [];
+
+  if (type) {
+    params.push(type);
+    conditions.push(`type = $${params.length}`);
+  }
+  if (minSize) {
+    params.push(Number(minSize));
+    conditions.push(`size_bytes >= $${params.length}`);
+  }
+  if (maxSize) {
+    params.push(Number(maxSize));
+    conditions.push(`size_bytes <= $${params.length}`);
+  }
+  if (from) {
+    params.push(new Date(from));
+    conditions.push(`created_at >= $${params.length}`);
+  }
+  if (to) {
+    params.push(new Date(to));
+    conditions.push(`created_at <= $${params.length}`);
+  }
+  if (q) {
+    params.push(q);
+    conditions.push(`search_vector @@ plainto_tsquery('english', $${params.length})`);
+  }
+
+  const whereClause = conditions.join(' AND ');
+  const orderClause = q
+    ? `ORDER BY ts_rank(search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`
+    : `ORDER BY created_at DESC`;
+
+  params.push(limit, offset);
+  const limitIdx = params.length - 1;
+  const offsetIdx = params.length;
+
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT id, title, description, type, size_bytes, status, created_at
+     FROM resources
+     WHERE ${whereClause}
+     ${orderClause}
+     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    ...params
+  );
+
+  const countRows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS total FROM resources WHERE ${whereClause}`,
+    ...params.slice(0, params.length - 2)
+  );
+
+  return {
+    results: rows.map(r => ({ ...r, size_bytes: r.size_bytes.toString() })),
+    total: countRows[0].total,
+    page: Number(page),
+    limit: Number(limit),
+  };
+}
+
+module.exports = { createUploadUrl, confirmUpload, downloadResource, listResources };
+

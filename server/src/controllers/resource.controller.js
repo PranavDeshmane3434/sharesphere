@@ -3,6 +3,7 @@ const { uploadUrlSchema, confirmSchema } = require('../validators/resource.valid
 const likeService = require('../services/like.service');
 const { reportSchema } = require('../validators/resource.validator');
 const reportService = require('../services/report.service');
+const { listQuerySchema } = require('../validators/resource.validator');
 
 
 // Get url to upload
@@ -61,4 +62,13 @@ async function report(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getUploadUrl, confirmUpload, downloadResource, like, unlike, report };
+// Search result
+async function listResources(req, res, next) {
+  try {
+    const query = listQuerySchema.parse(req.query);
+    const result = await resourceService.listResources(query);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+module.exports = { getUploadUrl, confirmUpload, downloadResource, like, unlike, report, listResources };

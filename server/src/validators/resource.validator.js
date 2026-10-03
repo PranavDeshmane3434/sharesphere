@@ -23,6 +23,16 @@ const reportSchema = z.object({
 const resolveReportSchema = z.object({
   decision: z.enum(['DISMISS', 'HIDE', 'REMOVE']),
 });
+const listQuerySchema = z.object({
+  q: z.string().max(200).optional(),
+  type: z.enum(ALLOWED_TYPES).optional(),
+  minSize: z.coerce.number().int().positive().optional(),
+  maxSize: z.coerce.number().int().positive().optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
 
-module.exports = { uploadUrlSchema, confirmSchema, reportSchema, resolveReportSchema };
+module.exports = { uploadUrlSchema, confirmSchema, reportSchema, resolveReportSchema, listQuerySchema };
 

@@ -4,3 +4,5 @@ node_modules
 .test.env
 /generated/prisma
 testlogin.txt
+
+test-notes.txt

@@ -13,21 +13,26 @@ export default function Transactions() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
-
   return (
     <div>
-      <h2>Transaction History</h2>
-      {transactions.length === 0 && <p>No transactions yet.</p>}
-      <ul>
+      <h2>Transaction history</h2>
+
+      {loading && <p className="loading-text">Loading...</p>}
+      {error && <p className="error-text">{error}</p>}
+      {!loading && transactions.length === 0 && (
+        <p className="empty-state">No transactions yet — upload or download a resource to get started.</p>
+      )}
+
+      <ul className="item-list" style={{ marginTop: transactions.length ? '1.5rem' : 0 }}>
         {transactions.map(t => (
-          <li key={t.id}>
-            <span style={{ color: t.type === 'EARN' ? 'green' : 'red' }}>
+          <li className="txn-row" key={t.id}>
+            <div>
+              <div>{t.type === 'EARN' ? 'Uploaded' : 'Downloaded'} "{t.resourceTitle || 'resource'}"</div>
+              <div className="txn-meta">{new Date(t.createdAt).toLocaleString()}</div>
+            </div>
+            <div className={`txn-amount ${t.type === 'EARN' ? 'earn' : 'spend'}`}>
               {t.type === 'EARN' ? '+' : '-'}{t.amount}
-            </span>
-            {' — '}{t.type === 'EARN' ? 'Uploaded' : 'Downloaded'} "{t.resourceTitle || 'resource'}"
-            {' — '}{new Date(t.createdAt).toLocaleString()}
+            </div>
           </li>
         ))}
       </ul>

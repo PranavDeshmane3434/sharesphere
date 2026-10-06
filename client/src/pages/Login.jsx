@@ -21,15 +21,33 @@ export default function Login() {
   }
 
   return (
-    <div>
-      <h2>Login</h2>
-      <form onSubmit={handleSubmit}>
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <button type="submit">Login</button>
-      </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <p>No account? <Link to="/register">Register</Link></p>
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2>Log in to ShareSphere</h2>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <input
+            className="field"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
+          <input
+            className="field"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+          <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>
+            Log in
+          </button>
+        </form>
+        {error && <p className="error-text">{error}</p>}
+        <p className="auth-switch">No account? <Link to="/register">Register</Link></p>
+      </div>
     </div>
   );
 }

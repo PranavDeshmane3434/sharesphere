@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 
+const STATUS_CLASS = {
+  PENDING: 'status-pending',
+  DISMISSED: 'status-dismissed',
+  ACTION_TAKEN: 'status-action',
+};
+
 export default function Admin() {
   const [reports, setReports] = useState([]);
   const [statusFilter, setStatusFilter] = useState('PENDING');
@@ -11,7 +17,7 @@ export default function Admin() {
   const fetchReports = useCallback(async () => {
     setLoading(true);
     setError('');
-    setReports([]); // clear stale data 
+    setReports([]);
     try {
       const { data } = await api.get('/admin/reports', {
         params: statusFilter ? { status: statusFilter } : {},
@@ -31,7 +37,7 @@ export default function Admin() {
     setError('');
     try {
       await api.post(`/admin/reports/${reportId}/resolve`, { decision });
-      fetchReports(); // refresh the list — resolved report drops out of PENDING view
+      fetchReports();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Action failed');
     } finally {
@@ -41,38 +47,44 @@ export default function Admin() {
 
   return (
     <div>
-      <h2>Admin — Reports</h2>
+      <h2>Reports</h2>
 
-      <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-        <option value="PENDING">Pending</option>
-        <option value="DISMISSED">Dismissed</option>
-        <option value="ACTION_TAKEN">Action Taken</option>
-        <option value="">All</option>
-      </select>
+      <div className="filter-row">
+        <select className="field" style={{ width: 'auto', marginBottom: 0 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="PENDING">Pending</option>
+          <option value="DISMISSED">Dismissed</option>
+          <option value="ACTION_TAKEN">Action taken</option>
+          <option value="">All</option>
+        </select>
+      </div>
 
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {!loading && reports.length === 0 && <p>No reports in this view.</p>}
+      {loading && <p className="loading-text">Loading...</p>}
+      {error && <p className="error-text">{error}</p>}
+      {!loading && reports.length === 0 && <p className="empty-state">No reports in this view.</p>}
 
-      <ul>
+      <ul className="item-list">
         {reports.map(r => (
-          <li key={r.id}>
-            <p><strong>Resource:</strong> {r.resource?.title} ({r.resource?.status})</p>
-            <p><strong>Reason:</strong> {r.reason}</p>
-            <p><strong>Reported by:</strong> {r.reporter?.email}</p>
-            <p><strong>Status:</strong> {r.status}</p>
-            {r.reviewedBy && <p><strong>Reviewed:</strong> {new Date(r.reviewedAt).toLocaleString()}</p>}
+          <li className="item-row" key={r.id}>
+            <p className="item-title">{r.resource?.title}</p>
+            <p className="item-meta">
+              Reported by {r.reporter?.email} · resource status {r.resource?.status}
+              {' '}<span className={`status-pill ${STATUS_CLASS[r.status]}`}>{r.status.replace('_', ' ').toLowerCase()}</span>
+            </p>
+            <p className="item-desc">{r.reason}</p>
+            {r.reviewedBy && (
+              <p className="item-meta">Reviewed {new Date(r.reviewedAt).toLocaleString()}</p>
+            )}
 
             {r.status === 'PENDING' && (
-              <div>
-                <button disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'DISMISS')}>
+              <div className="item-actions">
+                <button className="btn" disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'DISMISS')}>
                   Dismiss
                 </button>
-                <button disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'HIDE')}>
-                  Hide Resource
+                <button className="btn" disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'HIDE')}>
+                  Hide resource
                 </button>
-                <button disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'REMOVE')}>
-                  Remove Resource
+                <button className="btn btn-danger" disabled={actingOnId === r.id} onClick={() => handleResolve(r.id, 'REMOVE')}>
+                  Remove resource
                 </button>
               </div>
             )}

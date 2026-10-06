@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 const ALLOWED_TYPES = ['PDF', 'PPT', 'PPTX', 'DOC', 'DOCX', 'TXT'];
 
@@ -8,9 +9,11 @@ export default function Upload() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('PDF');
-  const [status, setStatus] = useState('idle'); // idle | uploading | confirming | done | error
+  const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const fileInputRef = useRef(null);
+  const { refreshUser } = useAuth();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -22,15 +25,8 @@ export default function Upload() {
       return;
     }
 
-    if (file.size <= 0) {
-      setError('Selected file is empty');
-      return;
-    }
-
     try {
-      // Step 1: ask backend for a presigned upload URL
       setStatus('uploading');
-
       const { data: uploadInfo } = await api.post('/resources/upload-url', {
         filename: file.name,
         contentType: file.type || 'application/octet-stream',
@@ -38,22 +34,13 @@ export default function Upload() {
         type,
       });
 
-      // Step 2: upload the actual file directly to Backblaze B2
-      const uploadResponse = await fetch(uploadInfo.presignedPutUrl, {
+      await fetch(uploadInfo.presignedPutUrl, {
         method: 'PUT',
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file,
       });
 
-      if (!uploadResponse.ok) {
-        throw new Error('File upload to storage failed');
-      }
-
-      // Step 3: tell our backend the upload is complete
       setStatus('confirming');
-
       const { data: resource } = await api.post('/resources/confirm', {
         uploadId: uploadInfo.uploadId,
         objectKey: uploadInfo.objectKey,
@@ -67,77 +54,62 @@ export default function Upload() {
       setFile(null);
       setTitle('');
       setDescription('');
+
+      await refreshUser();
     } catch (err) {
-      console.error(
-        'UPLOAD ERROR:',
-        JSON.stringify(err.response?.data || err.message, null, 2)
-      );
-
-      setError(
-        err.response?.data?.error?.message ||
-        err.message ||
-        'Upload failed'
-      );
-
+      setError(err.response?.data?.error?.message || err.message || 'Upload failed');
       setStatus('error');
     }
   }
 
+  const busy = status === 'uploading' || status === 'confirming';
+
   return (
-    <div>
-      <h2>Upload a Resource</h2>
+    <div className="upload-wrap">
+      <div className="upload-card">
+        <h2>Upload a resource</h2>
+        <form onSubmit={handleSubmit}>
+          <div
+            className={`file-drop${file ? ' has-file' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={e => setFile(e.target.files[0])}
+              required
+            />
+            {file ? file.name : 'Click to choose a file, or drag one here'}
+          </div>
 
-      <form onSubmit={handleSubmit}>
-        <input
-          type="file"
-          onChange={(e) => setFile(e.target.files[0])}
-          required
-        />
+          <input
+            className="field"
+            type="text"
+            placeholder="Title"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            required
+          />
+          <textarea
+            className="field"
+            placeholder="Description (optional)"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
+          <select className="field" value={type} onChange={e => setType(e.target.value)}>
+            {ALLOWED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
 
-        <input
-          type="text"
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+          <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: '100%' }}>
+            {status === 'uploading' ? 'Uploading...' : status === 'confirming' ? 'Confirming...' : 'Upload'}
+          </button>
+        </form>
 
-        <textarea
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          {ALLOWED_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="submit"
-          disabled={status === 'uploading' || status === 'confirming'}
-        >
-          {status === 'uploading'
-            ? 'Uploading...'
-            : status === 'confirming'
-            ? 'Confirming...'
-            : 'Upload'}
-        </button>
-      </form>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {result && (
-        <p style={{ color: 'green' }}>
-          Uploaded "{result.title}" successfully! You earned credits.
-        </p>
-      )}
+        {status === 'uploading' && <p className="status-text">Sending file to storage...</p>}
+        {status === 'confirming' && <p className="status-text">Confirming with server...</p>}
+        {error && <p className="error-text">{error}</p>}
+        {result && <p className="success-text">Uploaded "{result.title}" — credits added to your balance.</p>}
+      </div>
     </div>
   );
 }

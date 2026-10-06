@@ -23,16 +23,35 @@ export default function Register() {
   }
 
   return (
-    <div>
-      <h2>Register</h2>
-      <form onSubmit={handleSubmit}>
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password (min 8 chars)" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
-        <button type="submit">Register</button>
-      </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {success && <p style={{ color: 'green' }}>Registered! Redirecting to login...</p>}
-      <p>Already have an account? <Link to="/login">Login</Link></p>
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2>Create your account</h2>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <input
+            className="field"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
+          <input
+            className="field"
+            type="password"
+            placeholder="Password (min 8 characters)"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            minLength={8}
+          />
+          <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>
+            Register
+          </button>
+        </form>
+        {error && <p className="error-text">{error}</p>}
+        {success && <p className="success-text">Registered — redirecting to login...</p>}
+        <p className="auth-switch">Already have an account? <Link to="/login">Log in</Link></p>
+      </div>
     </div>
   );
 }

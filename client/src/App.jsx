@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Upload from "./pages/Upload";
@@ -8,44 +8,37 @@ import Browse from "./pages/Browse";
 import Admin from "./pages/Admin";
 import Transactions from "./pages/Transactions";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { Link } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 
 function Home() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
-    <div>
-      <h1>ShareSphere</h1>
+    <div className="hero">
+      <h1>Share. Learn. Grow.</h1>
+      <p>Upload your notes, earn credits, and download what the rest of your class has shared.</p>
+      <div className="hero-actions">
+        <Link to="/browse" className="btn btn-primary">Browse resources</Link>
+        <Link to="/upload" className="btn">Upload a resource</Link>
+      </div>
 
-      {user ? (
-        <div>
-          <p>
-            Logged in as {user.email} — Credits: {user.credits}
-          </p>
-
-          <nav>
-            <Link to="/browse">Browse</Link>
-            {" | "}
-            <Link to="/upload">Upload</Link>
-            {" | "}
-            <Link to="/transactions">Transactions</Link>
-            
-            {user.role === "ADMIN" && (
-              <>
-                {" | "}
-                <Link to="/admin">Admin</Link>
-              </>
-            )}
-          </nav>
-
-          <button onClick={logout}>Logout</button>
+      <div className="credit-explainer">
+        <div className="credit-explainer-item">
+          <div className="amount earn">+5 credits</div>
+          <p>Upload a resource and earn credits once it's confirmed.</p>
         </div>
-      ) : (
-        <p>
-          <Link to="/login">Login</Link>
-          {" or "}
-          <Link to="/register">Register</Link>
-        </p>
-      )}
+        <div className="credit-explainer-item">
+          <div className="amount spend">-2 credits</div>
+          <p>Download a resource to spend credits from your balance.</p>
+        </div>
+        {user && (
+          <div className="credit-explainer-item">
+            <div className="amount">{user.credits} credits</div>
+            <p>Your current balance.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -55,47 +48,43 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
-
-          <Route path="/login" element={<Login />} />
-
-          <Route path="/register" element={<Register />} />
-
-          <Route
-            path="/upload"
-            element={
-              <ProtectedRoute>
-                <Upload />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/browse"
-            element={
-              <ProtectedRoute>
-                <Browse />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute adminOnly>
-                <Admin />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/transactions"
-            element={
-              <ProtectedRoute>
-                <Transactions />
-              </ProtectedRoute>
-            }
-          />
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/upload"
+              element={
+                <ProtectedRoute>
+                  <Upload />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/browse"
+              element={
+                <ProtectedRoute>
+                  <Browse />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/transactions"
+              element={
+                <ProtectedRoute>
+                  <Transactions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>

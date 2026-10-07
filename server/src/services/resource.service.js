@@ -51,21 +51,20 @@ async function confirmUpload(
     throw err;
   }
 
-  // check upload file type 
+  // check upload file type
   const EXTENSION_MAP = {
-  PDF: ['.pdf'],
-  PPT: ['.ppt'],
-  PPTX: ['.pptx'],
-  DOC: ['.doc'],
-  DOCX: ['.docx'],
-  TXT: ['.txt'],
-};
+    PDF: [".pdf"],
+    PPT: [".ppt"],
+    PPTX: [".pptx"],
+    DOC: [".doc"],
+    DOCX: [".docx"],
+    TXT: [".txt"],
+  };
 
-function extensionMatchesType(objectKey, type) {
-  const ext = objectKey.slice(objectKey.lastIndexOf('.')).toLowerCase();
-  return EXTENSION_MAP[type]?.includes(ext) ?? false;
-}
-
+  function extensionMatchesType(objectKey, type) {
+    const ext = objectKey.slice(objectKey.lastIndexOf(".")).toLowerCase();
+    return EXTENSION_MAP[type]?.includes(ext) ?? false;
+  }
 
   // Verify the file actually exists in R2, and trust R2's size, not the client's
   const head = await storage.headObject(objectKey);
@@ -81,10 +80,10 @@ function extensionMatchesType(objectKey, type) {
   }
 
   if (!extensionMatchesType(objectKey, type)) {
-  const err = new Error('File extension does not match declared type');
-  err.status = 400;
-  throw err;
-}
+    const err = new Error("File extension does not match declared type");
+    err.status = 400;
+    throw err;
+  }
 
   try {
     const resource = await prisma.$transaction(async (tx) => {
@@ -123,10 +122,7 @@ function extensionMatchesType(objectKey, type) {
   }
 }
 
-async function listResources(
-  { q, type, minSize, maxSize, from, to, page = 1, limit = 20 },
-  userId,
-) {
+async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   const offset = (page - 1) * limit;
   const conditions = [`r.status = 'ACTIVE'`];
   const params = [];
@@ -134,22 +130,6 @@ async function listResources(
   if (type) {
     params.push(type);
     conditions.push(`r.type = $${params.length}`);
-  }
-  if (minSize) {
-    params.push(Number(minSize));
-    conditions.push(`r.size_bytes >= $${params.length}`);
-  }
-  if (maxSize) {
-    params.push(Number(maxSize));
-    conditions.push(`r.size_bytes <= $${params.length}`);
-  }
-  if (from) {
-    params.push(new Date(from));
-    conditions.push(`r.created_at >= $${params.length}`);
-  }
-  if (to) {
-    params.push(new Date(to));
-    conditions.push(`r.created_at <= $${params.length}`);
   }
   if (q) {
     params.push(q);
@@ -159,9 +139,19 @@ async function listResources(
   }
 
   const whereClause = conditions.join(" AND ");
-  const orderClause = q
-    ? `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`
-    : `ORDER BY r.created_at DESC`;
+
+  let orderClause;
+  if (q && (!sort || sort === "relevance")) {
+    orderClause = `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`;
+  } else if (sort === "oldest") {
+    orderClause = `ORDER BY r.created_at ASC`;
+  } else if (sort === "size_asc") {
+    orderClause = `ORDER BY r.size_bytes ASC`;
+  } else if (sort === "size_desc") {
+    orderClause = `ORDER BY r.size_bytes DESC`;
+  } else {
+    orderClause = `ORDER BY r.created_at DESC`; // newest, also the default
+  }
 
   params.push(userId);
   const userIdIdx = params.length;
@@ -200,9 +190,39 @@ async function listResources(
   };
 }
 
+async function listModeratedResources() {
+  return prisma.resource.findMany({
+    where: { status: { in: ["HIDDEN", "REMOVED"] } },
+    include: { uploader: { select: { email: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+async function setResourceStatus(resourceId, status) {
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+  if (!resource) {
+    const err = new Error('Resource not found');
+    err.status = 404;
+    throw err;
+  }
+
+  if (resource.status === 'REMOVED' && status === 'ACTIVE') {
+    const err = new Error('Removed resources cannot be restored');
+    err.status = 409;
+    throw err;
+  }
+
+  return prisma.resource.update({
+    where: { id: resourceId },
+    data: { status },
+  });
+}
+
 module.exports = {
   createUploadUrl,
   confirmUpload,
   downloadResource,
   listResources,
+  listModeratedResources,
+  setResourceStatus,
 };

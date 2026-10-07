@@ -2,7 +2,7 @@ const rateLimit = require('express-rate-limit');
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' } },
 });
 

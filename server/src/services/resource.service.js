@@ -4,6 +4,87 @@ const storage = require("./storage.service");
 const creditService = require("./credit.service");
 const { UPLOAD_REWARD, MAX_FILE_SIZE_BYTES } = require("../config/constants");
 const { DOWNLOAD_COST } = require("../config/constants");
+const SORT_MAP = {
+  newest: "r.created_at DESC",
+  oldest: "r.created_at ASC",
+  size_asc: "r.size_bytes ASC",
+  size_desc: "r.size_bytes DESC",
+  most_liked: "like_count DESC",
+  most_downloaded: "download_count DESC",
+};
+
+async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
+  const offset = (page - 1) * limit;
+  const conditions = [`r.status = 'ACTIVE'`];
+  const params = [];
+
+  if (type) {
+    params.push(type);
+    conditions.push(`r.type = $${params.length}`);
+  }
+  if (q) {
+    params.push(q);
+    conditions.push(
+      `r.search_vector @@ plainto_tsquery('english', $${params.length})`,
+    );
+  }
+
+  const whereClause = conditions.join(" AND ");
+
+  const sortTokens = (sort || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let orderClause;
+  if (q && sortTokens.length === 0) {
+    orderClause = `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`;
+  } else {
+    const validSorts = sortTokens.map((s) => SORT_MAP[s]).filter(Boolean);
+    orderClause =
+      validSorts.length > 0
+        ? `ORDER BY ${validSorts.join(", ")}`
+        : `ORDER BY r.created_at DESC`;
+  }
+
+  params.push(userId);
+  const userIdIdx = params.length;
+  params.push(limit, offset);
+  const limitIdx = params.length - 1;
+  const offsetIdx = params.length;
+
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT
+       r.id, r.title, r.description, r.type, r.size_bytes, r.status, r.created_at,
+       COUNT(DISTINCT l.user_id)::int AS like_count,
+       COUNT(DISTINCT t.id)::int AS download_count,
+       BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me
+     FROM resources r
+     LEFT JOIN likes l ON l.resource_id = r.id
+     LEFT JOIN transactions t ON t.resource_id = r.id AND t.type = 'SPEND'
+     WHERE ${whereClause}
+     GROUP BY r.id
+     ${orderClause}
+     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    ...params,
+  );
+
+  const countRows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS total FROM resources r WHERE ${whereClause}`,
+    ...params.slice(0, params.length - 3),
+  );
+
+  return {
+    results: rows.map((r) => ({
+      ...r,
+      size_bytes: r.size_bytes.toString(),
+      liked_by_me: !!r.liked_by_me,
+    })),
+    total: countRows[0].total,
+    page: Number(page),
+    limit: Number(limit),
+  };
+}
+
 
 async function downloadResource(userId, resourceId) {
   const resource = await prisma.resource.findUnique({
@@ -122,73 +203,7 @@ async function confirmUpload(
   }
 }
 
-async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
-  const offset = (page - 1) * limit;
-  const conditions = [`r.status = 'ACTIVE'`];
-  const params = [];
 
-  if (type) {
-    params.push(type);
-    conditions.push(`r.type = $${params.length}`);
-  }
-  if (q) {
-    params.push(q);
-    conditions.push(
-      `r.search_vector @@ plainto_tsquery('english', $${params.length})`,
-    );
-  }
-
-  const whereClause = conditions.join(" AND ");
-
-  let orderClause;
-  if (q && (!sort || sort === "relevance")) {
-    orderClause = `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`;
-  } else if (sort === "oldest") {
-    orderClause = `ORDER BY r.created_at ASC`;
-  } else if (sort === "size_asc") {
-    orderClause = `ORDER BY r.size_bytes ASC`;
-  } else if (sort === "size_desc") {
-    orderClause = `ORDER BY r.size_bytes DESC`;
-  } else {
-    orderClause = `ORDER BY r.created_at DESC`; // newest, also the default
-  }
-
-  params.push(userId);
-  const userIdIdx = params.length;
-  params.push(limit, offset);
-  const limitIdx = params.length - 1;
-  const offsetIdx = params.length;
-
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT
-       r.id, r.title, r.description, r.type, r.size_bytes, r.status, r.created_at,
-       COUNT(l.user_id)::int AS like_count,
-       BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me
-     FROM resources r
-     LEFT JOIN likes l ON l.resource_id = r.id
-     WHERE ${whereClause}
-     GROUP BY r.id
-     ${orderClause}
-     LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-    ...params,
-  );
-
-  const countRows = await prisma.$queryRawUnsafe(
-    `SELECT COUNT(*)::int AS total FROM resources r WHERE ${whereClause}`,
-    ...params.slice(0, params.length - 3),
-  );
-
-  return {
-    results: rows.map((r) => ({
-      ...r,
-      size_bytes: r.size_bytes.toString(),
-      liked_by_me: !!r.liked_by_me,
-    })),
-    total: countRows[0].total,
-    page: Number(page),
-    limit: Number(limit),
-  };
-}
 
 async function listModeratedResources() {
   return prisma.resource.findMany({
@@ -199,15 +214,17 @@ async function listModeratedResources() {
 }
 
 async function setResourceStatus(resourceId, status) {
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+  const resource = await prisma.resource.findUnique({
+    where: { id: resourceId },
+  });
   if (!resource) {
-    const err = new Error('Resource not found');
+    const err = new Error("Resource not found");
     err.status = 404;
     throw err;
   }
 
-  if (resource.status === 'REMOVED' && status === 'ACTIVE') {
-    const err = new Error('Removed resources cannot be restored');
+  if (resource.status === "REMOVED" && status === "ACTIVE") {
+    const err = new Error("Removed resources cannot be restored");
     err.status = 409;
     throw err;
   }

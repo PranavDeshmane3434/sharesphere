@@ -27,9 +27,7 @@ const resolveReportSchema = z.object({
 const listQuerySchema = z.object({
   q: z.string().max(200).optional(),
   type: z.enum(ALLOWED_TYPES).optional(),
-  sort: z
-    .enum(["relevance", "newest", "oldest", "size_asc", "size_desc"])
-    .optional(),
+  sort: z.string().max(100).optional(), 
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });

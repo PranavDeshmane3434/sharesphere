@@ -2,16 +2,12 @@ const crypto = require("crypto");
 const prisma = require("../prisma/client");
 const storage = require("./storage.service");
 const creditService = require("./credit.service");
-const { UPLOAD_REWARD, MAX_FILE_SIZE_BYTES } = require("../config/constants");
-const { DOWNLOAD_COST } = require("../config/constants");
-const SORT_MAP = {
-  newest: "r.created_at DESC",
-  oldest: "r.created_at ASC",
-  size_asc: "r.size_bytes ASC",
-  size_desc: "r.size_bytes DESC",
-  most_liked: "like_count DESC",
-  most_downloaded: "download_count DESC",
-};
+const {
+  UPLOAD_REWARD,
+  MAX_FILE_SIZE_BYTES,
+  DOWNLOAD_COST,
+  SORT_SQL,
+} = require("../config/constants");
 
 async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   const offset = (page - 1) * limit;
@@ -22,28 +18,26 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
     params.push(type);
     conditions.push(`r.type = $${params.length}`);
   }
+
+  let queryIdx = null;
   if (q) {
     params.push(q);
+    queryIdx = params.length;
     conditions.push(
-      `r.search_vector @@ plainto_tsquery('english', $${params.length})`,
+      `r.search_vector @@ plainto_tsquery('english', $${queryIdx})`,
     );
   }
 
   const whereClause = conditions.join(" AND ");
 
-  const sortTokens = (sort || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // One sort key only. With a search term and no explicit sort, rank by relevance.
   let orderClause;
-  if (q && sortTokens.length === 0) {
-    orderClause = `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${params.indexOf(q) + 1})) DESC`;
+  if (sort) {
+    orderClause = `ORDER BY ${SORT_SQL[sort]}`;
+  } else if (q) {
+    orderClause = `ORDER BY ts_rank(r.search_vector, plainto_tsquery('english', $${queryIdx})) DESC, r.id`;
   } else {
-    const validSorts = sortTokens.map((s) => SORT_MAP[s]).filter(Boolean);
-    orderClause =
-      validSorts.length > 0
-        ? `ORDER BY ${validSorts.join(", ")}`
-        : `ORDER BY r.created_at DESC`;
+    orderClause = `ORDER BY ${SORT_SQL.newest}`;
   }
 
   params.push(userId);
@@ -100,8 +94,7 @@ async function downloadResource(userId, resourceId) {
 
   const isOwner = resource.uploaderId === userId;
 
-  // Uploaders download their own file free: no credit deduction, no ledger row.
-  // Everyone else goes through the locked, atomic credit deduction as before.
+  // Uploaders download their own file free: no deduction, no ledger row.
   if (!isOwner) {
     await creditService.deductDownloadCredits(
       userId,
@@ -110,7 +103,7 @@ async function downloadResource(userId, resourceId) {
     );
   }
 
-  // Signed URL is still generated after any DB transaction has committed
+  // Signed URL is generated after any DB transaction has committed
   const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
 
   return { downloadUrl, title: resource.title, free: isOwner };
@@ -130,11 +123,24 @@ async function createUploadUrl(
   return { uploadId, objectKey, presignedPutUrl, sizeBytes, type };
 }
 
+const EXTENSION_MAP = {
+  PDF: [".pdf"],
+  PPT: [".ppt"],
+  PPTX: [".pptx"],
+  DOC: [".doc"],
+  DOCX: [".docx"],
+  TXT: [".txt"],
+};
+
+function extensionMatchesType(objectKey, type) {
+  const ext = objectKey.slice(objectKey.lastIndexOf(".")).toLowerCase();
+  return EXTENSION_MAP[type]?.includes(ext) ?? false;
+}
+
 async function confirmUpload(
   userId,
   { uploadId, objectKey, title, description, type },
 ) {
-  // Ownership check: the object key must belong to this user + this uploadId
   const expectedPrefix = `uploads/${userId}/${uploadId}/`;
   if (!objectKey.startsWith(expectedPrefix)) {
     const err = new Error("Object key does not match user/upload");
@@ -142,22 +148,6 @@ async function confirmUpload(
     throw err;
   }
 
-  // check upload file type
-  const EXTENSION_MAP = {
-    PDF: [".pdf"],
-    PPT: [".ppt"],
-    PPTX: [".pptx"],
-    DOC: [".doc"],
-    DOCX: [".docx"],
-    TXT: [".txt"],
-  };
-
-  function extensionMatchesType(objectKey, type) {
-    const ext = objectKey.slice(objectKey.lastIndexOf(".")).toLowerCase();
-    return EXTENSION_MAP[type]?.includes(ext) ?? false;
-  }
-
-  // Verify the file actually exists in R2, and trust R2's size, not the client's
   const head = await storage.headObject(objectKey);
   if (!head.exists) {
     const err = new Error("File not found in storage — upload may have failed");
@@ -202,7 +192,6 @@ async function confirmUpload(
 
     return { resource, alreadyConfirmed: false };
   } catch (err) {
-    // Unique constraint on upload_id means this was already confirmed — idempotent no-op
     if (err.code === "P2002" && err.meta?.target?.includes("upload_id")) {
       const existing = await prisma.resource.findUnique({
         where: { uploadId },

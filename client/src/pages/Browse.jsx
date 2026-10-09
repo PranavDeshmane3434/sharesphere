@@ -15,8 +15,10 @@ const SORT_OPTIONS = [
 
 function formatSize(bytes) {
   const n = Number(bytes);
+
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -45,13 +47,18 @@ export default function Browse() {
   const fetchResources = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const params = { page, limit };
-      if (q) params.q = q;
+
+      if (q.trim()) params.q = q.trim();
       if (type) params.type = type;
-      if (sortKeys.length > 0) params.sort = sortKeys.join(",");
+      if (sortKeys.length > 0) {
+        params.sort = sortKeys.join(",");
+      }
 
       const { data } = await api.get("/resources", { params });
+
       setResources(data.results);
       setTotal(data.total);
     } catch (err) {
@@ -69,40 +76,52 @@ export default function Browse() {
 
   function handleSearchSubmit(e) {
     e.preventDefault();
-    setPage(1);
-    fetchResources();
+
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      fetchResources();
+    }
   }
 
   function toggleSort(key) {
     setSortKeys((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
+
     setPage(1);
   }
 
   async function handleDownload(resourceId, title) {
     setDownloadError("");
     setDownloadingId(resourceId);
+
     try {
       const { data } = await api.post(`/resources/${resourceId}/download`);
 
       const fileResponse = await fetch(data.downloadUrl);
-      if (!fileResponse.ok)
+
+      if (!fileResponse.ok) {
         throw new Error("Failed to fetch file from storage");
+      }
 
       const blob = await fileResponse.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = title || "download";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
+      try {
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = title || "download";
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
 
       await refreshUser();
-      await fetchResources(); // refresh download_count on the list too
+      await fetchResources();
     } catch (err) {
       if (err.response?.status === 402) {
         setDownloadError("Not enough credits to download this resource.");
@@ -122,12 +141,14 @@ export default function Browse() {
 
   async function handleToggleLike(resource) {
     setActionError("");
+
     try {
       if (resource.liked_by_me) {
         await api.delete(`/resources/${resource.id}/like`);
       } else {
         await api.put(`/resources/${resource.id}/like`);
       }
+
       await fetchResources();
     } catch (err) {
       setActionError(err.response?.data?.error?.message || "Action failed");
@@ -136,12 +157,15 @@ export default function Browse() {
 
   async function handleSubmitReport(resourceId) {
     setActionError("");
+
     try {
       await api.post(`/resources/${resourceId}/report`, {
         reason: reportReason.trim(),
       });
+
       setReportingId(null);
       setReportReason("");
+
       await fetchResources();
     } catch (err) {
       if (err.response?.status === 409) {
@@ -158,6 +182,7 @@ export default function Browse() {
     <div>
       <div className="browse-header">
         <h2 style={{ margin: 0 }}>Browse resources</h2>
+
         {user && <span className="credit-badge">{user.credits} credits</span>}
       </div>
 
@@ -170,6 +195,7 @@ export default function Browse() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+
           <select
             className="field"
             value={type}
@@ -179,12 +205,14 @@ export default function Browse() {
             }}
           >
             <option value="">All types</option>
+
             {ALLOWED_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
           </select>
+
           <button className="btn btn-primary" type="submit">
             Search
           </button>
@@ -195,6 +223,7 @@ export default function Browse() {
         {SORT_OPTIONS.map((opt) => {
           const orderIndex = sortKeys.indexOf(opt.key);
           const active = orderIndex !== -1;
+
           return (
             <button
               key={opt.key}
@@ -203,10 +232,12 @@ export default function Browse() {
               onClick={() => toggleSort(opt.key)}
             >
               {active && <span className="order-badge">{orderIndex + 1}</span>}
+
               {opt.label}
             </button>
           );
         })}
+
         {sortKeys.length > 0 && (
           <button
             type="button"
@@ -222,9 +253,13 @@ export default function Browse() {
       </div>
 
       {loading && <p className="loading-text">Loading...</p>}
+
       {error && <p className="error-text">{error}</p>}
+
       {downloadError && <p className="error-text">{downloadError}</p>}
+
       {actionError && <p className="error-text">{actionError}</p>}
+
       {!loading && resources.length === 0 && (
         <p className="empty-state">No resources found.</p>
       )}
@@ -233,70 +268,96 @@ export default function Browse() {
         {resources.map((r) => (
           <li className="item-row" key={r.id}>
             <p className="item-title">{r.title}</p>
+
             <p className="item-meta">
               {r.type} · {formatSize(r.size_bytes)}
             </p>
+
             <p className="item-stats">
               {r.like_count} likes · {r.download_count} downloads
             </p>
+
             {r.description && <p className="item-desc">{r.description}</p>}
 
-            <div className="item-actions">
-              <button className="btn" onClick={() => handleToggleLike(r)}>
-                {r.liked_by_me ? "♥" : "♡"} {r.like_count}
-              </button>
+            {r.is_mine ? (
+              <>
+                <p className="item-meta">Uploaded by you</p>
 
-              {reportingId !== r.id && (
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setActionError("");
-                    setReportingId(r.id);
-                    setReportReason("");
-                  }}
-                >
-                  Report
-                </button>
-              )}
+                <div className="item-actions">
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginLeft: "auto" }}
+                    onClick={() => handleDownload(r.id, r.title)}
+                    disabled={downloadingId === r.id}
+                  >
+                    {downloadingId === r.id
+                      ? "Downloading..."
+                      : "Download — free"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="item-actions">
+                  <button className="btn" onClick={() => handleToggleLike(r)}>
+                    {r.liked_by_me ? "♥" : "♡"} {r.like_count}
+                  </button>
 
-              <button
-                className="btn btn-primary"
-                style={{ marginLeft: "auto" }}
-                onClick={() => handleDownload(r.id, r.title)}
-                disabled={downloadingId === r.id}
-              >
-                {downloadingId === r.id
-                  ? "Downloading..."
-                  : "Download — 2 credits"}
-              </button>
-            </div>
+                  {reportingId !== r.id && (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setActionError("");
+                        setReportingId(r.id);
+                        setReportReason("");
+                      }}
+                    >
+                      Report
+                    </button>
+                  )}
 
-            {reportingId === r.id && (
-              <div className="report-inline">
-                <input
-                  className="field"
-                  type="text"
-                  placeholder="Reason (min 5 characters)"
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                />
-                <button
-                  className="btn"
-                  onClick={() => handleSubmitReport(r.id)}
-                  disabled={reportReason.trim().length < 5}
-                >
-                  Submit
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setReportingId(null);
-                    setReportReason("");
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
+                  <button
+                    className="btn btn-primary"
+                    style={{ marginLeft: "auto" }}
+                    onClick={() => handleDownload(r.id, r.title)}
+                    disabled={downloadingId === r.id}
+                  >
+                    {downloadingId === r.id
+                      ? "Downloading..."
+                      : "Download — 2 credits"}
+                  </button>
+                </div>
+
+                {reportingId === r.id && (
+                  <div className="report-inline">
+                    <input
+                      className="field"
+                      type="text"
+                      placeholder="Reason (min 5 characters)"
+                      value={reportReason}
+                      onChange={(e) => setReportReason(e.target.value)}
+                    />
+
+                    <button
+                      className="btn"
+                      onClick={() => handleSubmitReport(r.id)}
+                      disabled={reportReason.trim().length < 5}
+                    >
+                      Submit
+                    </button>
+
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setReportingId(null);
+                        setReportReason("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </li>
         ))}
@@ -310,9 +371,11 @@ export default function Browse() {
         >
           Previous
         </button>
+
         <span>
           Page {page} of {totalPages} ({total} total)
         </span>
+
         <button
           className="btn"
           disabled={page >= totalPages}

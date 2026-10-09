@@ -55,6 +55,7 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   const rows = await prisma.$queryRawUnsafe(
     `SELECT
        r.id, r.title, r.description, r.type, r.size_bytes, r.status, r.created_at,
+       (r.uploader_id = $${userIdIdx}) AS is_mine,
        COUNT(DISTINCT l.user_id)::int AS like_count,
        COUNT(DISTINCT t.id)::int AS download_count,
        BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me
@@ -78,13 +79,13 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
       ...r,
       size_bytes: r.size_bytes.toString(),
       liked_by_me: !!r.liked_by_me,
+      is_mine: !!r.is_mine,
     })),
     total: countRows[0].total,
     page: Number(page),
     limit: Number(limit),
   };
 }
-
 
 async function downloadResource(userId, resourceId) {
   const resource = await prisma.resource.findUnique({
@@ -97,13 +98,22 @@ async function downloadResource(userId, resourceId) {
     throw err;
   }
 
-  // Deduct credits — locked, atomic, commits before we touch storage
-  await creditService.deductDownloadCredits(userId, resourceId, DOWNLOAD_COST);
+  const isOwner = resource.uploaderId === userId;
 
-  // Signed URL generated AFTER the transaction commits — never hold a DB lock during network I/O
+  // Uploaders download their own file free: no credit deduction, no ledger row.
+  // Everyone else goes through the locked, atomic credit deduction as before.
+  if (!isOwner) {
+    await creditService.deductDownloadCredits(
+      userId,
+      resourceId,
+      DOWNLOAD_COST,
+    );
+  }
+
+  // Signed URL is still generated after any DB transaction has committed
   const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
 
-  return { downloadUrl, title: resource.title };
+  return { downloadUrl, title: resource.title, free: isOwner };
 }
 
 async function createUploadUrl(
@@ -202,8 +212,6 @@ async function confirmUpload(
     throw err;
   }
 }
-
-
 
 async function listModeratedResources() {
   return prisma.resource.findMany({

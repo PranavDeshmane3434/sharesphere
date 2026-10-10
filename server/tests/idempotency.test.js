@@ -24,7 +24,7 @@ test('confirming the same upload twice does not duplicate resource or credits', 
   const uploadId = require('crypto').randomUUID();
   const objectKey = `uploads/${user.id}/${uploadId}/test.txt`;
 
-  const body = { uploadId, objectKey, title: 'T', type: 'TXT' };
+  const body = { uploadId, objectKey, title: 'T', type: 'TXT', category: 'NOTES' };
 
   const first = await request(app).post('/api/resources/confirm').set('Authorization', `Bearer ${token}`).send(body);
   expect(first.status).toBe(201);
@@ -37,5 +37,5 @@ test('confirming the same upload twice does not duplicate resource or credits', 
   expect(resourceCount).toBe(1);
 
   const finalUser = await prisma.user.findUnique({ where: { id: user.id } });
-  expect(finalUser.credits).toBe(5); // awarded once, not twice
+  expect(finalUser.credits).toBe(5);
 });

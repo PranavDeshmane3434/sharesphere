@@ -9,7 +9,21 @@ const {
   SORT_SQL,
 } = require("../config/constants");
 
-async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
+async function listResources(
+  {
+    q,
+    type,
+    category,
+    subject,
+    semester,
+    unit,
+    academicYear,
+    sort,
+    page = 1,
+    limit = 20,
+  },
+  userId,
+) {
   const offset = (page - 1) * limit;
   const conditions = [`r.status = 'ACTIVE'`];
   const params = [];
@@ -17,6 +31,27 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   if (type) {
     params.push(type);
     conditions.push(`r.type = $${params.length}`);
+  }
+  if (category) {
+    // Explicit cast: category is a Postgres enum, the parameter arrives as text
+    params.push(category);
+    conditions.push(`r.category = $${params.length}::"ResourceCategory"`);
+  }
+  if (subject) {
+    params.push(subject);
+    conditions.push(`LOWER(r.subject) = LOWER($${params.length})`);
+  }
+  if (semester) {
+    params.push(Number(semester));
+    conditions.push(`r.semester = $${params.length}::int`);
+  }
+  if (unit) {
+    params.push(Number(unit));
+    conditions.push(`r.unit = $${params.length}::int`);
+  }
+  if (academicYear) {
+    params.push(academicYear);
+    conditions.push(`r.academic_year = $${params.length}`);
   }
 
   let queryIdx = null;
@@ -30,7 +65,6 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
 
   const whereClause = conditions.join(" AND ");
 
-  // One sort key only. With a search term and no explicit sort, rank by relevance.
   let orderClause;
   if (sort) {
     orderClause = `ORDER BY ${SORT_SQL[sort]}`;
@@ -49,6 +83,7 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   const rows = await prisma.$queryRawUnsafe(
     `SELECT
        r.id, r.title, r.description, r.type, r.size_bytes, r.status, r.created_at,
+       r.category, r.subject, r.semester, r.unit, r.academic_year,
        (r.uploader_id = $${userIdIdx}) AS is_mine,
        COUNT(DISTINCT l.user_id)::int AS like_count,
        COUNT(DISTINCT t.id)::int AS download_count,
@@ -81,6 +116,68 @@ async function listResources({ q, type, sort, page = 1, limit = 20 }, userId) {
   };
 }
 
+// Same field names as the listing, so the frontend can treat both alike
+async function getResourceDetails(resourceId, userId) {
+  const resource = await prisma.resource.findUnique({
+    where: { id: resourceId },
+    include: { uploader: { select: { email: true } } },
+  });
+
+  if (!resource || resource.status !== "ACTIVE") {
+    const err = new Error("Resource not found");
+    err.status = 404;
+    throw err;
+  }
+
+  const [likeCount, downloadCount, myLike] = await Promise.all([
+    prisma.like.count({ where: { resourceId } }),
+    prisma.transaction.count({ where: { resourceId, type: "SPEND" } }),
+    prisma.like.findUnique({
+      where: { userId_resourceId: { userId, resourceId } },
+    }),
+  ]);
+
+  return {
+    id: resource.id,
+    title: resource.title,
+    description: resource.description,
+    type: resource.type,
+    category: resource.category,
+    subject: resource.subject,
+    semester: resource.semester,
+    unit: resource.unit,
+    academic_year: resource.academicYear,
+    size_bytes: resource.sizeBytes.toString(),
+    status: resource.status,
+    created_at: resource.createdAt,
+    uploader_name: resource.uploader.email.split("@")[0],
+    is_mine: resource.uploaderId === userId,
+    like_count: likeCount,
+    download_count: downloadCount,
+    liked_by_me: !!myLike,
+  };
+}
+
+// Values for the Browse filter dropdowns and the Upload subject suggestions
+async function getFilterOptions() {
+  const subjects = await prisma.$queryRaw`
+    SELECT DISTINCT ON (LOWER(subject)) subject
+    FROM resources
+    WHERE status = 'ACTIVE' AND subject IS NOT NULL
+    ORDER BY LOWER(subject), subject
+  `;
+  const years = await prisma.$queryRaw`
+    SELECT DISTINCT academic_year
+    FROM resources
+    WHERE status = 'ACTIVE' AND academic_year IS NOT NULL
+    ORDER BY academic_year DESC
+  `;
+  return {
+    subjects: subjects.map((r) => r.subject),
+    academicYears: years.map((r) => r.academic_year),
+  };
+}
+
 async function downloadResource(userId, resourceId) {
   const resource = await prisma.resource.findUnique({
     where: { id: resourceId },
@@ -103,7 +200,6 @@ async function downloadResource(userId, resourceId) {
     );
   }
 
-  // Signed URL is generated after any DB transaction has committed
   const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
 
   return { downloadUrl, title: resource.title, free: isOwner };
@@ -139,7 +235,18 @@ function extensionMatchesType(objectKey, type) {
 
 async function confirmUpload(
   userId,
-  { uploadId, objectKey, title, description, type },
+  {
+    uploadId,
+    objectKey,
+    title,
+    description,
+    type,
+    category,
+    subject,
+    semester,
+    unit,
+    academicYear,
+  },
 ) {
   const expectedPrefix = `uploads/${userId}/${uploadId}/`;
   if (!objectKey.startsWith(expectedPrefix)) {
@@ -175,6 +282,11 @@ async function confirmUpload(
           title,
           description,
           type,
+          category,
+          subject,
+          semester,
+          unit,
+          academicYear,
           sizeBytes: head.sizeBytes,
           objectKey,
         },
@@ -237,6 +349,8 @@ module.exports = {
   confirmUpload,
   downloadResource,
   listResources,
+  getResourceDetails,
+  getFilterOptions,
   listModeratedResources,
   setResourceStatus,
 };

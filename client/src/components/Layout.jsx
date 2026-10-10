@@ -1,8 +1,10 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+  const wide = pathname.startsWith("/resources/");
 
   return (
     <>
@@ -20,7 +22,9 @@ export default function Layout() {
                   <Link to="/transactions">Transactions</Link>
                   {user.role === "ADMIN" && <Link to="/admin">Admin</Link>}
                 </div>
-                <span className="credit-badge">{user.credits} credits</span>
+                {user.role !== "ADMIN" && (
+                  <span className="credit-badge">{user.credits} credits</span>
+                )}
                 <span className="nav-divider"></span>
                 <button className="logout-btn" onClick={logout}>
                   Log out
@@ -35,7 +39,7 @@ export default function Layout() {
           </nav>
         </div>
       </header>
-      <main className="page">
+      <main className={`page${wide ? " page-wide" : ""}`}>
         <Outlet />
       </main>
     </>

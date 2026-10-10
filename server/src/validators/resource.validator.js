@@ -1,5 +1,35 @@
 const { z } = require('zod');
-const { ALLOWED_TYPES, MAX_FILE_SIZE_BYTES, SORT_SQL } = require('../config/constants');
+const {
+  ALLOWED_TYPES,
+  MAX_FILE_SIZE_BYTES,
+  SORT_SQL,
+  CATEGORIES,
+  MAX_SEMESTER,
+  MAX_UNIT,
+} = require('../config/constants');
+
+// Empty strings from forms/query strings count as "not provided"
+const blankToUndefined = (v) => (v === '' || v === null ? undefined : v);
+const optional = (schema) => z.preprocess(blankToUndefined, schema.optional());
+
+const subjectSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .transform((s) => s.replace(/\s+/g, ' '));
+
+const semesterSchema = z.coerce.number().int().min(1).max(MAX_SEMESTER);
+const unitSchema = z.coerce.number().int().min(1).max(MAX_UNIT);
+
+const academicYearSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, 'Academic year must look like 2026-27')
+  .refine((v) => {
+    const start = Number(v.slice(0, 4));
+    const end = Number(v.slice(5));
+    return start >= 2000 && start <= 2100 && (start + 1) % 100 === end;
+  }, 'Academic year must be consecutive years, e.g. 2026-27');
 
 const uploadUrlSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -11,9 +41,14 @@ const uploadUrlSchema = z.object({
 const confirmSchema = z.object({
   uploadId: z.string().uuid(),
   objectKey: z.string().min(1),
-  title: z.string().min(1).max(255),
+  title: z.string().trim().min(1).max(255),
   description: z.string().max(2000).optional(),
   type: z.enum(ALLOWED_TYPES),
+  category: z.enum(CATEGORIES),
+  subject: optional(subjectSchema),
+  semester: optional(semesterSchema),
+  unit: optional(unitSchema),
+  academicYear: optional(academicYearSchema),
 });
 
 const reportSchema = z.object({
@@ -30,8 +65,13 @@ const setStatusSchema = z.object({
 
 const listQuerySchema = z.object({
   q: z.string().max(200).optional(),
-  type: z.enum(ALLOWED_TYPES).optional(),
-  sort: z.enum(Object.keys(SORT_SQL)).optional(), // exactly one key, anything else is a 400
+  type: optional(z.enum(ALLOWED_TYPES)),
+  category: optional(z.enum(CATEGORIES)),
+  subject: optional(subjectSchema),
+  semester: optional(semesterSchema),
+  unit: optional(unitSchema),
+  academicYear: optional(academicYearSchema),
+  sort: z.enum(Object.keys(SORT_SQL)).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });

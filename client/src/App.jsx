@@ -8,8 +8,9 @@ import Browse from "./pages/Browse";
 import Admin from "./pages/Admin";
 import Transactions from "./pages/Transactions";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { Link } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { Link } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import ResourceDetails from "./pages/ResourceDetails";
 
 function Home() {
   const { user } = useAuth();
@@ -17,10 +18,17 @@ function Home() {
   return (
     <div className="hero">
       <h1>Share. Learn. Grow.</h1>
-      <p>Upload your notes, earn credits, and download what the rest of your class has shared.</p>
+      <p>
+        Upload your notes, earn credits, and download what the rest of your
+        class has shared.
+      </p>
       <div className="hero-actions">
-        <Link to="/browse" className="btn btn-primary">Browse resources</Link>
-        <Link to="/upload" className="btn">Upload a resource</Link>
+        <Link to="/browse" className="btn btn-primary">
+          Browse resources
+        </Link>
+        <Link to="/upload" className="btn">
+          Upload a resource
+        </Link>
       </div>
 
       <div className="credit-explainer">
@@ -81,6 +89,14 @@ export default function App() {
               element={
                 <ProtectedRoute adminOnly>
                   <Admin />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/resources/:id"
+              element={
+                <ProtectedRoute>
+                  <ResourceDetails />
                 </ProtectedRoute>
               }
             />

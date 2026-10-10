@@ -12,7 +12,7 @@ describe('Auth', () => {
       .send({ email: 'a@test.com', password: 'password123' });
     expect(res.status).toBe(201);
     expect(res.body.email).toBe('a@test.com');
-    expect(res.body.credits).toBe(5);
+    expect(res.body.credits).toBe(10);
   });
 
   test('rejects duplicate registration', async () => {

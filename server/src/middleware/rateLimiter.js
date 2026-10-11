@@ -8,7 +8,7 @@ const authLimiter = rateLimit({
 
 const actionLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  max: 100,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down' } },
 });
 

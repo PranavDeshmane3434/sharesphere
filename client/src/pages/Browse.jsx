@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { StarsDisplay } from "../components/Stars";
 import {
   CATEGORIES,
   CATEGORY_LABEL,
@@ -17,6 +18,7 @@ const SORT_OPTIONS = [
   { key: "most_liked", label: "Most liked" },
   { key: "size_asc", label: "Smallest" },
   { key: "size_desc", label: "Largest" },
+  { key: "highest_rated", label: "Highest rated" },
 ];
 
 const EMPTY_FILTERS = {
@@ -67,25 +69,30 @@ export default function Browse() {
     api
       .get("/resources/filters")
       .then(({ data }) => setFilterOptions(data))
-      .catch(() => {}); // dropdown values are optional, never block Browse
+      .catch(() => {});
   }, []);
 
   const fetchResources = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const params = { page, limit, sort };
-      if (q) params.q = q;
+
+      if (q.trim()) params.q = q.trim();
+
       Object.entries(filters).forEach(([key, value]) => {
         if (value) params[key] = value;
       });
 
       const { data } = await api.get("/resources", { params });
+
       setResources(data.results);
       setTotal(data.total);
     } catch (err) {
       setError(
-        err.response?.data?.error?.message || "Failed to load resources",
+        err.response?.data?.error?.message ||
+          "Failed to load resources",
       );
     } finally {
       setLoading(false);
@@ -115,31 +122,41 @@ export default function Browse() {
   async function handleDownload(resourceId, title) {
     setDownloadError("");
     setDownloadingId(resourceId);
+
     try {
-      const { data } = await api.post(`/resources/${resourceId}/download`);
+      const { data } = await api.post(
+        `/resources/${resourceId}/download`,
+      );
 
       const fileResponse = await fetch(data.downloadUrl);
-      if (!fileResponse.ok)
+
+      if (!fileResponse.ok) {
         throw new Error("Failed to fetch file from storage");
+      }
 
       const blob = await fileResponse.blob();
       const blobUrl = URL.createObjectURL(blob);
-
       const link = document.createElement("a");
+
       link.href = blobUrl;
       link.download = title || "download";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
       URL.revokeObjectURL(blobUrl);
 
       await refreshUser();
       await fetchResources();
     } catch (err) {
       if (err.response?.status === 402) {
-        setDownloadError("Not enough credits to download this resource.");
+        setDownloadError(
+          "Not enough credits to download this resource.",
+        );
       } else if (err.response?.status === 404) {
-        setDownloadError("This resource is no longer available.");
+        setDownloadError(
+          "This resource is no longer available.",
+        );
       } else {
         setDownloadError(
           err.response?.data?.error?.message ||
@@ -154,24 +171,30 @@ export default function Browse() {
 
   async function handleToggleLike(resource) {
     setActionError("");
+
     try {
       if (resource.liked_by_me) {
         await api.delete(`/resources/${resource.id}/like`);
       } else {
         await api.put(`/resources/${resource.id}/like`);
       }
+
       await fetchResources();
     } catch (err) {
-      setActionError(err.response?.data?.error?.message || "Action failed");
+      setActionError(
+        err.response?.data?.error?.message || "Action failed",
+      );
     }
   }
 
   async function handleSubmitReport(resourceId) {
     setActionError("");
+
     try {
       await api.post(`/resources/${resourceId}/report`, {
         reason: reportReason.trim(),
       });
+
       setReportingId(null);
       setReportReason("");
       await fetchResources();
@@ -179,7 +202,9 @@ export default function Browse() {
       if (err.response?.status === 409) {
         setActionError("You already reported this resource.");
       } else {
-        setActionError(err.response?.data?.error?.message || "Report failed");
+        setActionError(
+          err.response?.data?.error?.message || "Report failed",
+        );
       }
     }
   }
@@ -190,8 +215,11 @@ export default function Browse() {
     <div>
       <div className="browse-header">
         <h2 style={{ margin: 0 }}>Browse resources</h2>
+
         {user && user.role !== "ADMIN" && (
-          <span className="credit-badge">{user.credits} credits</span>
+          <span className="credit-badge">
+            {user.credits} credits
+          </span>
         )}
       </div>
 
@@ -205,6 +233,7 @@ export default function Browse() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+
           <button className="btn btn-primary" type="submit">
             Search
           </button>
@@ -225,6 +254,7 @@ export default function Browse() {
             </option>
           ))}
         </select>
+
         <select
           className="field"
           value={filters.semester}
@@ -237,6 +267,7 @@ export default function Browse() {
             </option>
           ))}
         </select>
+
         <select
           className="field"
           value={filters.category}
@@ -249,6 +280,7 @@ export default function Browse() {
             </option>
           ))}
         </select>
+
         <select
           className="field"
           value={filters.type}
@@ -261,6 +293,7 @@ export default function Browse() {
             </option>
           ))}
         </select>
+
         <select
           className="field"
           value={filters.unit}
@@ -273,6 +306,7 @@ export default function Browse() {
             </option>
           ))}
         </select>
+
         <select
           className="field"
           value={filters.academicYear}
@@ -286,17 +320,23 @@ export default function Browse() {
           ))}
         </select>
       </div>
+
       <div className="filter-actions">
         {anyFilterActive && (
-          <button type="button" className="btn-text" onClick={clearFilters}>
+          <button
+            type="button"
+            className="btn-text"
+            onClick={clearFilters}
+          >
             Clear filters
           </button>
         )}
       </div>
 
-      {/* Sorting: exactly one option */}
+      {/* Sorting */}
       <div className="sort-row">
         <label htmlFor="sort-select">Sort by</label>
+
         <select
           id="sort-select"
           className="field"
@@ -316,8 +356,11 @@ export default function Browse() {
 
       {loading && <p className="loading-text">Loading...</p>}
       {error && <p className="error-text">{error}</p>}
-      {downloadError && <p className="error-text">{downloadError}</p>}
+      {downloadError && (
+        <p className="error-text">{downloadError}</p>
+      )}
       {actionError && <p className="error-text">{actionError}</p>}
+
       {!loading && resources.length === 0 && (
         <p className="empty-state">No resources found.</p>
       )}
@@ -332,6 +375,7 @@ export default function Browse() {
           ]
             .filter(Boolean)
             .join(" · ");
+
           const fileLine = [
             r.category && CATEGORY_LABEL[r.category],
             r.type,
@@ -340,13 +384,19 @@ export default function Browse() {
             .filter(Boolean)
             .join(" · ");
 
+          const ratingCount = Number(r.rating_count) || 0;
+          const ratingAverage = Number(r.rating_avg) || 0;
+
           return (
             <li className="item-row" key={r.id}>
               <div className="item-title-row">
-                <Link to={`/resources/${r.id}`} className="item-title-link">
+                <Link
+                  to={`/resources/${r.id}`}
+                  className="item-title-link"
+                >
                   {r.title}
                 </Link>
-                {/* Visual cue only; the title link above is the real, keyboard-focusable one */}
+
                 <Link
                   to={`/resources/${r.id}`}
                   className="view-link"
@@ -356,16 +406,40 @@ export default function Browse() {
                   View details
                 </Link>
               </div>
-              {academicLine && <p className="item-meta">{academicLine}</p>}
+
+              {academicLine && (
+                <p className="item-meta">{academicLine}</p>
+              )}
+
               <p className="item-meta">{fileLine}</p>
+
               <p className="item-stats">
                 {r.like_count} likes · {r.download_count} downloads
               </p>
-              {r.description && <p className="item-desc">{r.description}</p>}
+
+              {/* Ratings */}
+              <p className="item-stats item-rating">
+                {ratingCount > 0 ? (
+                  <>
+                    <StarsDisplay value={ratingAverage} />
+                    <span>
+                      {ratingAverage.toFixed(1)} · {ratingCount}{" "}
+                      {ratingCount === 1 ? "rating" : "ratings"}
+                    </span>
+                  </>
+                ) : (
+                  <span>No ratings yet</span>
+                )}
+              </p>
+
+              {r.description && (
+                <p className="item-desc">{r.description}</p>
+              )}
 
               {r.is_mine ? (
                 <>
                   <p className="item-meta">Uploaded by you</p>
+
                   <div className="item-actions">
                     <button
                       className="btn btn-primary"
@@ -382,7 +456,10 @@ export default function Browse() {
               ) : (
                 <>
                   <div className="item-actions">
-                    <button className="btn" onClick={() => handleToggleLike(r)}>
+                    <button
+                      className="btn"
+                      onClick={() => handleToggleLike(r)}
+                    >
                       {r.liked_by_me ? "♥" : "♡"} {r.like_count}
                     </button>
 
@@ -418,8 +495,11 @@ export default function Browse() {
                         type="text"
                         placeholder="Reason (min 5 characters)"
                         value={reportReason}
-                        onChange={(e) => setReportReason(e.target.value)}
+                        onChange={(e) =>
+                          setReportReason(e.target.value)
+                        }
                       />
+
                       <button
                         className="btn"
                         onClick={() => handleSubmitReport(r.id)}
@@ -427,6 +507,7 @@ export default function Browse() {
                       >
                         Submit
                       </button>
+
                       <button
                         className="btn"
                         onClick={() => {
@@ -453,9 +534,11 @@ export default function Browse() {
         >
           Previous
         </button>
+
         <span>
           Page {page} of {totalPages} ({total} total)
         </span>
+
         <button
           className="btn"
           disabled={page >= totalPages}

@@ -14,6 +14,7 @@ router.post('/confirm', auth, resourceController.confirmUpload);
 router.post('/:id/download', auth, actionLimiter, resourceController.downloadResource);
 router.put('/:id/like', auth, resourceController.like);
 router.delete('/:id/like', auth, resourceController.unlike);
+router.put('/:id/rating', auth, actionLimiter, resourceController.rate);
 router.post('/:id/report', auth, actionLimiter, resourceController.report);
 
 module.exports = router;

@@ -55,6 +55,11 @@ const reportSchema = z.object({
   reason: z.string().min(5).max(500),
 });
 
+// A real integer from 1 to 5. Strings like "5" are rejected on purpose.
+const ratingSchema = z.object({
+  value: z.number().int().min(1).max(5),
+});
+
 const resolveReportSchema = z.object({
   decision: z.enum(['DISMISS', 'HIDE', 'REMOVE']),
 });
@@ -80,6 +85,7 @@ module.exports = {
   uploadUrlSchema,
   confirmSchema,
   reportSchema,
+  ratingSchema,
   resolveReportSchema,
   setStatusSchema,
   listQuerySchema,

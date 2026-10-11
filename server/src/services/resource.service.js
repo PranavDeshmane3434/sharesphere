@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const prisma = require("../prisma/client");
 const storage = require("./storage.service");
 const creditService = require("./credit.service");
+const ratingService = require("./rating.service");
 const {
   UPLOAD_REWARD,
   MAX_FILE_SIZE_BYTES,
@@ -10,18 +11,7 @@ const {
 } = require("../config/constants");
 
 async function listResources(
-  {
-    q,
-    type,
-    category,
-    subject,
-    semester,
-    unit,
-    academicYear,
-    sort,
-    page = 1,
-    limit = 20,
-  },
+  { q, type, category, subject, semester, unit, academicYear, sort, page = 1, limit = 20 },
   userId,
 ) {
   const offset = (page - 1) * limit;
@@ -80,6 +70,8 @@ async function listResources(
   const limitIdx = params.length - 1;
   const offsetIdx = params.length;
 
+  // Ratings are pre-aggregated to one row per resource so the likes/transactions
+  // joins can't inflate them. MAX() just picks that single value back out.
   const rows = await prisma.$queryRawUnsafe(
     `SELECT
        r.id, r.title, r.description, r.type, r.size_bytes, r.status, r.created_at,
@@ -87,10 +79,19 @@ async function listResources(
        (r.uploader_id = $${userIdIdx}) AS is_mine,
        COUNT(DISTINCT l.user_id)::int AS like_count,
        COUNT(DISTINCT t.id)::int AS download_count,
-       BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me
+       BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me,
+       MAX(rs.avg_value) AS rating_avg,
+       COALESCE(MAX(rs.cnt), 0)::int AS rating_count
      FROM resources r
      LEFT JOIN likes l ON l.resource_id = r.id
      LEFT JOIN transactions t ON t.resource_id = r.id AND t.type = 'SPEND'
+     LEFT JOIN (
+       SELECT resource_id,
+              ROUND(AVG(value)::numeric, 1)::float8 AS avg_value,
+              COUNT(*)::int AS cnt
+       FROM ratings
+       GROUP BY resource_id
+     ) rs ON rs.resource_id = r.id
      WHERE ${whereClause}
      GROUP BY r.id
      ${orderClause}
@@ -129,12 +130,16 @@ async function getResourceDetails(resourceId, userId) {
     throw err;
   }
 
-  const [likeCount, downloadCount, myLike] = await Promise.all([
+  const isMine = resource.uploaderId === userId;
+
+  const [likeCount, downloadCount, myLike, rating, downloaded] = await Promise.all([
     prisma.like.count({ where: { resourceId } }),
     prisma.transaction.count({ where: { resourceId, type: "SPEND" } }),
     prisma.like.findUnique({
       where: { userId_resourceId: { userId, resourceId } },
     }),
+    ratingService.getRatingSummary(resourceId, userId),
+    ratingService.hasDownloaded(userId, resourceId),
   ]);
 
   return {
@@ -151,10 +156,14 @@ async function getResourceDetails(resourceId, userId) {
     status: resource.status,
     created_at: resource.createdAt,
     uploader_name: resource.uploader.email.split("@")[0],
-    is_mine: resource.uploaderId === userId,
+    is_mine: isMine,
     like_count: likeCount,
     download_count: downloadCount,
     liked_by_me: !!myLike,
+    rating_average: rating.rating_average,
+    rating_count: rating.rating_count,
+    my_rating: rating.my_rating,
+    can_rate: !isMine && downloaded,
   };
 }
 
@@ -193,11 +202,7 @@ async function downloadResource(userId, resourceId) {
 
   // Uploaders download their own file free: no deduction, no ledger row.
   if (!isOwner) {
-    await creditService.deductDownloadCredits(
-      userId,
-      resourceId,
-      DOWNLOAD_COST,
-    );
+    await creditService.deductDownloadCredits(userId, resourceId, DOWNLOAD_COST);
   }
 
   const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
@@ -235,18 +240,7 @@ function extensionMatchesType(objectKey, type) {
 
 async function confirmUpload(
   userId,
-  {
-    uploadId,
-    objectKey,
-    title,
-    description,
-    type,
-    category,
-    subject,
-    semester,
-    unit,
-    academicYear,
-  },
+  { uploadId, objectKey, title, description, type, category, subject, semester, unit, academicYear },
 ) {
   const expectedPrefix = `uploads/${userId}/${uploadId}/`;
   if (!objectKey.startsWith(expectedPrefix)) {

@@ -1,0 +1,46 @@
+warning: in the working copy of 'server/prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/server/prisma/schema.prisma b/server/prisma/schema.prisma[m
+[1mindex 4dbaffd..75466f4 100644[m
+[1m--- a/server/prisma/schema.prisma[m
+[1m+++ b/server/prisma/schema.prisma[m
+[36m@@ -50,6 +50,7 @@[m [mmodel User {[m
+   resources       Resource[][m
+   transactions    Transaction[][m
+   likes           Like[][m
+[32m+[m[32m  ratings         Rating[][m
+   reportsFiled    Report[] @relation("ReporterRelation")[m
+   reportsReviewed Report[] @relation("ReviewerRelation")[m
+ [m
+[36m@@ -73,10 +74,10 @@[m [mmodel Resource {[m
+   objectKey    String            @map("object_key")[m
+   status       ResourceStatus    @default(ACTIVE)[m
+   createdAt    DateTime          @default(now()) @map("created_at")[m
+[31m-  searchVector Unsupported("tsvector")? @map("search_vector")[m
+ [m
+   transactions Transaction[][m
+   likes        Like[][m
+[32m+[m[32m  ratings      Rating[][m
+   reports      Report[][m
+ [m
+   @@index([status, type, createdAt])[m
+[36m@@ -107,6 +108,20 @@[m [mmodel Like {[m
+   @@map("likes")[m
+ }[m
+ [m
+[32m+[m[32mmodel Rating {[m
+[32m+[m[32m  id         String   @id @default(uuid())[m
+[32m+[m[32m  userId     String   @map("user_id")[m
+[32m+[m[32m  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)[m
+[32m+[m[32m  resourceId String   @map("resource_id")[m
+[32m+[m[32m  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)[m
+[32m+[m[32m  value      Int[m
+[32m+[m[32m  createdAt  DateTime @default(now()) @map("created_at")[m
+[32m+[m[32m  updatedAt  DateTime @updatedAt @map("updated_at")[m
+[32m+[m
+[32m+[m[32m  @@unique([userId, resourceId])[m
+[32m+[m[32m  @@map("ratings")[m
+[32m+[m[32m}[m
+[32m+[m
+ model Report {[m
+   id         String       @id @default(uuid())[m
+   reporterId String       @map("reporter_id")[m

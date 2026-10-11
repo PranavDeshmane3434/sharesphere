@@ -50,6 +50,7 @@ model User {
   resources       Resource[]
   transactions    Transaction[]
   likes           Like[]
+  ratings         Rating[]
   reportsFiled    Report[] @relation("ReporterRelation")
   reportsReviewed Report[] @relation("ReviewerRelation")
 
@@ -73,10 +74,11 @@ model Resource {
   objectKey    String            @map("object_key")
   status       ResourceStatus    @default(ACTIVE)
   createdAt    DateTime          @default(now()) @map("created_at")
-  searchVector Unsupported("tsvector")? @map("search_vector")
-
+  searchVector Unsupported("tsvector")? @default(dbgenerated()) @map("search_vector")  
+  
   transactions Transaction[]
   likes        Like[]
+  ratings      Rating[]
   reports      Report[]
 
   @@index([status, type, createdAt])
@@ -105,6 +107,20 @@ model Like {
 
   @@id([userId, resourceId])
   @@map("likes")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String   @map("resource_id")
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  value      Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, resourceId])
+  @@map("ratings")
 }
 
 model Report {

@@ -1437,3 +1437,41 @@ form.auth-form {
     padding: 16px;
   }
 }
+
+
+/* Ratings */
+.stars { display: inline-flex; letter-spacing: 0.1em; }
+.star { color: #555960; }
+.star.on { color: var(--accent); }
+
+.stars-input { display: flex; gap: 0.15rem; }
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: #555960;
+  cursor: pointer;
+  transition: color 0.1s, transform 0.1s;
+}
+.star-btn.on { color: var(--accent); }
+.star-btn:hover:not(:disabled) { transform: scale(1.15); }
+.star-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius); }
+.star-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.rating-box { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.25rem; }
+.rating-box-title { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--muted); }
+.rating-hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted); }
+
+.detail-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 1rem;
+}
+.detail-rating strong { color: var(--ink); }
+
+.item-rating { display: flex; align-items: center; gap: 0.4rem; }

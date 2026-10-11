@@ -1,10 +1,12 @@
 const resourceService = require('../services/resource.service');
 const likeService = require('../services/like.service');
 const reportService = require('../services/report.service');
+const ratingService = require('../services/rating.service');
 const {
   uploadUrlSchema,
   confirmSchema,
   reportSchema,
+  ratingSchema,
   listQuerySchema,
 } = require('../validators/resource.validator');
 
@@ -51,6 +53,13 @@ async function report(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function rate(req, res, next) {
+  try {
+    const { value } = ratingSchema.parse(req.body);
+    res.json(await ratingService.rateResource(req.user.id, req.params.id, value));
+  } catch (err) { next(err); }
+}
+
 async function listResources(req, res, next) {
   try {
     const query = listQuerySchema.parse(req.query);
@@ -77,6 +86,7 @@ module.exports = {
   like,
   unlike,
   report,
+  rate,
   listResources,
   getResource,
   getFilterOptions,

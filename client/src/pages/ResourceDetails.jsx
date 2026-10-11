@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
-import api from "../api/client";
-import { useAuth } from "../context/AuthContext";
-import { CATEGORY_LABEL, formatSize, formatDate } from "../constants";
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { CATEGORY_LABEL, formatSize, formatDate } from '../constants';
+import { StarsDisplay, StarsInput } from '../components/Stars';
 
 function BackButton() {
   return (
     <Link to="/browse" className="back-btn">
-      <span className="back-arrow" aria-hidden="true">
-        ←
-      </span>
+      <span className="back-arrow" aria-hidden="true">←</span>
       Back to Browse
     </Link>
   );
@@ -22,16 +21,17 @@ export default function ResourceDetails() {
   const [resource, setResource] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
-  const [actionError, setActionError] = useState("");
+  const [actionError, setActionError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [rating, setRating] = useState(false);
   const [reporting, setReporting] = useState(false);
-  const [reportReason, setReportReason] = useState("");
+  const [reportReason, setReportReason] = useState('');
   const [reportSent, setReportSent] = useState(false);
 
   const fetchResource = useCallback(async () => {
-    setError("");
+    setError('');
     try {
       const { data } = await api.get(`/resources/${id}`);
       setResource(data);
@@ -40,9 +40,7 @@ export default function ResourceDetails() {
       if (err.response?.status === 404) {
         setNotFound(true);
       } else {
-        setError(
-          err.response?.data?.error?.message || "Failed to load resource",
-        );
+        setError(err.response?.data?.error?.message || 'Failed to load resource');
       }
     } finally {
       setLoading(false);
@@ -57,21 +55,20 @@ export default function ResourceDetails() {
   }, [fetchResource]);
 
   async function handleDownload() {
-    setActionError("");
+    setActionError('');
     setDownloading(true);
     try {
       const { data } = await api.post(`/resources/${id}/download`);
 
       const fileResponse = await fetch(data.downloadUrl);
-      if (!fileResponse.ok)
-        throw new Error("Failed to fetch file from storage");
+      if (!fileResponse.ok) throw new Error('Failed to fetch file from storage');
 
       const blob = await fileResponse.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = data.title || "download";
+      link.download = data.title || 'download';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -81,15 +78,11 @@ export default function ResourceDetails() {
       await fetchResource();
     } catch (err) {
       if (err.response?.status === 402) {
-        setActionError("Not enough credits to download this resource.");
+        setActionError('Not enough credits to download this resource.');
       } else if (err.response?.status === 404) {
-        setActionError("This resource is no longer available.");
+        setActionError('This resource is no longer available.');
       } else {
-        setActionError(
-          err.response?.data?.error?.message ||
-            err.message ||
-            "Download failed",
-        );
+        setActionError(err.response?.data?.error?.message || err.message || 'Download failed');
       }
     } finally {
       setDownloading(false);
@@ -97,7 +90,7 @@ export default function ResourceDetails() {
   }
 
   async function handleToggleLike() {
-    setActionError("");
+    setActionError('');
     try {
       if (resource.liked_by_me) {
         await api.delete(`/resources/${id}/like`);
@@ -106,24 +99,35 @@ export default function ResourceDetails() {
       }
       await fetchResource();
     } catch (err) {
-      setActionError(err.response?.data?.error?.message || "Action failed");
+      setActionError(err.response?.data?.error?.message || 'Action failed');
+    }
+  }
+
+  async function handleRate(value) {
+    setActionError('');
+    setRating(true);
+    try {
+      await api.put(`/resources/${id}/rating`, { value });
+      await fetchResource();
+    } catch (err) {
+      setActionError(err.response?.data?.error?.message || 'Rating failed');
+    } finally {
+      setRating(false);
     }
   }
 
   async function handleSubmitReport() {
-    setActionError("");
+    setActionError('');
     try {
-      await api.post(`/resources/${id}/report`, {
-        reason: reportReason.trim(),
-      });
+      await api.post(`/resources/${id}/report`, { reason: reportReason.trim() });
       setReporting(false);
-      setReportReason("");
+      setReportReason('');
       setReportSent(true);
     } catch (err) {
       if (err.response?.status === 409) {
-        setActionError("You already reported this resource.");
+        setActionError('You already reported this resource.');
       } else {
-        setActionError(err.response?.data?.error?.message || "Report failed");
+        setActionError(err.response?.data?.error?.message || 'Report failed');
       }
     }
   }
@@ -140,9 +144,7 @@ export default function ResourceDetails() {
     return (
       <div className="detail-page">
         <BackButton />
-        <p className="empty-state">
-          This resource doesn't exist or is no longer available.
-        </p>
+        <p className="empty-state">This resource doesn't exist or is no longer available.</p>
       </div>
     );
   }
@@ -151,25 +153,25 @@ export default function ResourceDetails() {
     return (
       <div className="detail-page">
         <BackButton />
-        <p className="error-text">{error || "Failed to load resource"}</p>
+        <p className="error-text">{error || 'Failed to load resource'}</p>
       </div>
     );
   }
 
   const details = [
-    ["Subject", resource.subject],
-    ["Semester", resource.semester && `Semester ${resource.semester}`],
-    ["Unit", resource.unit && `Unit ${resource.unit}`],
-    ["Academic year", resource.academic_year],
-    ["Category", resource.category && CATEGORY_LABEL[resource.category]],
-    ["File type", resource.type],
+    ['Subject', resource.subject],
+    ['Semester', resource.semester && `Semester ${resource.semester}`],
+    ['Unit', resource.unit && `Unit ${resource.unit}`],
+    ['Academic year', resource.academic_year],
+    ['Category', resource.category && CATEGORY_LABEL[resource.category]],
+    ['File type', resource.type],
   ].filter(([, value]) => value);
 
   const byline = `${
-    resource.is_mine
-      ? "Uploaded by you"
-      : `Uploaded by ${resource.uploader_name}`
+    resource.is_mine ? 'Uploaded by you' : `Uploaded by ${resource.uploader_name}`
   } · ${formatDate(resource.created_at)}`;
+
+  const hasRatings = resource.rating_count > 0;
 
   return (
     <div className="detail-page">
@@ -178,14 +180,25 @@ export default function ResourceDetails() {
       <header className="detail-hero">
         <div className="detail-tags">
           {resource.category && (
-            <span className="tag tag-accent">
-              {CATEGORY_LABEL[resource.category]}
-            </span>
+            <span className="tag tag-accent">{CATEGORY_LABEL[resource.category]}</span>
           )}
           <span className="tag">{resource.type}</span>
         </div>
         <h1 className="detail-title">{resource.title}</h1>
         <p className="detail-byline">{byline}</p>
+        <p className="detail-rating">
+          {hasRatings ? (
+            <>
+              <StarsDisplay value={resource.rating_average} />
+              <strong>{resource.rating_average.toFixed(1)}</strong>
+              <span>
+                · {resource.rating_count} {resource.rating_count === 1 ? 'rating' : 'ratings'}
+              </span>
+            </>
+          ) : (
+            <span>No ratings yet</span>
+          )}
+        </p>
       </header>
 
       <div className="stat-row">
@@ -207,11 +220,9 @@ export default function ResourceDetails() {
         <div className="detail-main">
           <section className="detail-section">
             <h2 className="section-label">About this resource</h2>
-            {resource.description ? (
-              <p className="detail-desc">{resource.description}</p>
-            ) : (
-              <p className="detail-desc empty">No description provided.</p>
-            )}
+            {resource.description
+              ? <p className="detail-desc">{resource.description}</p>
+              : <p className="detail-desc empty">No description provided.</p>}
           </section>
 
           {details.length > 0 && (
@@ -237,24 +248,21 @@ export default function ResourceDetails() {
               disabled={downloading}
             >
               {downloading
-                ? "Downloading..."
+                ? 'Downloading...'
                 : resource.is_mine
-                  ? "Download — free"
-                  : "Download — 2 credits"}
+                  ? 'Download — free'
+                  : 'Download — 2 credits'}
             </button>
 
             {!resource.is_mine && (
               <div className="action-secondary">
                 <button className="btn" onClick={handleToggleLike}>
-                  {resource.liked_by_me ? "♥ Liked" : "♡ Like"}
+                  {resource.liked_by_me ? '♥ Liked' : '♡ Like'}
                 </button>
                 {!reporting && !reportSent && (
                   <button
                     className="btn"
-                    onClick={() => {
-                      setActionError("");
-                      setReporting(true);
-                    }}
+                    onClick={() => { setActionError(''); setReporting(true); }}
                   >
                     Report
                   </button>
@@ -263,11 +271,7 @@ export default function ResourceDetails() {
             )}
 
             {actionError && <p className="error-text">{actionError}</p>}
-            {reportSent && (
-              <p className="success-text">
-                Report submitted. An admin will review it.
-              </p>
-            )}
+            {reportSent && <p className="success-text">Report submitted. An admin will review it.</p>}
 
             {reporting && (
               <div className="report-inline">
@@ -276,7 +280,7 @@ export default function ResourceDetails() {
                   type="text"
                   placeholder="Reason (min 5 characters)"
                   value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
+                  onChange={e => setReportReason(e.target.value)}
                 />
                 <button
                   className="btn"
@@ -285,15 +289,31 @@ export default function ResourceDetails() {
                 >
                   Submit
                 </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    setReporting(false);
-                    setReportReason("");
-                  }}
-                >
+                <button className="btn" onClick={() => { setReporting(false); setReportReason(''); }}>
                   Cancel
                 </button>
+              </div>
+            )}
+
+            {!resource.is_mine && (
+              <div className="rating-box">
+                <p className="rating-box-title">Your rating</p>
+                {resource.can_rate ? (
+                  <>
+                    <StarsInput
+                      value={resource.my_rating}
+                      onSelect={handleRate}
+                      disabled={rating}
+                    />
+                    <p className="rating-hint">
+                      {resource.my_rating
+                        ? `You rated this ${resource.my_rating}/5. Click a star to change it.`
+                        : 'Click a star to rate this resource.'}
+                    </p>
+                  </>
+                ) : (
+                  <p className="rating-hint">Download this resource to rate it.</p>
+                )}
               </div>
             )}
           </div>

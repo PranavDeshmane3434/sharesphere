@@ -103,6 +103,20 @@ export default function ResourceDetails() {
     }
   }
 
+  async function handleToggleSave() {
+    setActionError('');
+    try {
+      if (resource.saved_by_me) {
+        await api.delete(`/resources/${id}/save`);
+      } else {
+        await api.put(`/resources/${id}/save`);
+      }
+      await fetchResource();
+    } catch (err) {
+      setActionError(err.response?.data?.error?.message || 'Action failed');
+    }
+  }
+
   async function handleRate(value) {
     setActionError('');
     setRating(true);
@@ -184,7 +198,20 @@ export default function ResourceDetails() {
           )}
           <span className="tag">{resource.type}</span>
         </div>
-        <h1 className="detail-title">{resource.title}</h1>
+
+        <div className="detail-title-row">
+          <h1 className="detail-title">{resource.title}</h1>
+          {!resource.is_mine && (
+            <button
+              type="button"
+              className={`save-btn${resource.saved_by_me ? ' saved' : ''}`}
+              onClick={handleToggleSave}
+            >
+              {resource.saved_by_me ? 'Saved' : 'Save'}
+            </button>
+          )}
+        </div>
+
         <p className="detail-byline">{byline}</p>
         <p className="detail-rating">
           {hasRatings ? (

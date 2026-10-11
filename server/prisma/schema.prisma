@@ -43,7 +43,7 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String   @map("password_hash")
-  credits      Int      @default(10)
+  credits      Int      @default(5)
   role         UserRole @default(USER)
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -51,6 +51,7 @@ model User {
   transactions    Transaction[]
   likes           Like[]
   ratings         Rating[]
+  savedResources  SavedResource[]
   reportsFiled    Report[] @relation("ReporterRelation")
   reportsReviewed Report[] @relation("ReviewerRelation")
 
@@ -75,10 +76,11 @@ model Resource {
   status       ResourceStatus    @default(ACTIVE)
   createdAt    DateTime          @default(now()) @map("created_at")
   searchVector Unsupported("tsvector")? @default(dbgenerated()) @map("search_vector")  
-  
+
   transactions Transaction[]
   likes        Like[]
   ratings      Rating[]
+  savedBy      SavedResource[]
   reports      Report[]
 
   @@index([status, type, createdAt])
@@ -121,6 +123,17 @@ model Rating {
 
   @@unique([userId, resourceId])
   @@map("ratings")
+}
+
+model SavedResource {
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String   @map("resource_id")
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([userId, resourceId])
+  @@map("saved_resources")
 }
 
 model Report {

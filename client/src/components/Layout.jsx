@@ -18,6 +18,7 @@ export default function Layout() {
               <>
                 <div className="nav-links">
                   <Link to="/browse">Browse</Link>
+                  <Link to="/saved">Saved</Link>
                   <Link to="/upload">Upload</Link>
                   <Link to="/transactions">Transactions</Link>
                   {user.role === "ADMIN" && <Link to="/admin">Admin</Link>}

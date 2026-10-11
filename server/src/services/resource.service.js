@@ -11,7 +11,18 @@ const {
 } = require("../config/constants");
 
 async function listResources(
-  { q, type, category, subject, semester, unit, academicYear, sort, page = 1, limit = 20 },
+  {
+    q,
+    type,
+    category,
+    subject,
+    semester,
+    unit,
+    academicYear,
+    sort,
+    page = 1,
+    limit = 20,
+  },
   userId,
 ) {
   const offset = (page - 1) * limit;
@@ -80,6 +91,10 @@ async function listResources(
        COUNT(DISTINCT l.user_id)::int AS like_count,
        COUNT(DISTINCT t.id)::int AS download_count,
        BOOL_OR(l.user_id = $${userIdIdx}) AS liked_by_me,
+       EXISTS (
+         SELECT 1 FROM saved_resources sr
+         WHERE sr.resource_id = r.id AND sr.user_id = $${userIdIdx}
+       ) AS saved_by_me,
        MAX(rs.avg_value) AS rating_avg,
        COALESCE(MAX(rs.cnt), 0)::int AS rating_count
      FROM resources r
@@ -109,6 +124,7 @@ async function listResources(
       ...r,
       size_bytes: r.size_bytes.toString(),
       liked_by_me: !!r.liked_by_me,
+      saved_by_me: !!r.saved_by_me,
       is_mine: !!r.is_mine,
     })),
     total: countRows[0].total,
@@ -132,15 +148,19 @@ async function getResourceDetails(resourceId, userId) {
 
   const isMine = resource.uploaderId === userId;
 
-  const [likeCount, downloadCount, myLike, rating, downloaded] = await Promise.all([
-    prisma.like.count({ where: { resourceId } }),
-    prisma.transaction.count({ where: { resourceId, type: "SPEND" } }),
-    prisma.like.findUnique({
-      where: { userId_resourceId: { userId, resourceId } },
-    }),
-    ratingService.getRatingSummary(resourceId, userId),
-    ratingService.hasDownloaded(userId, resourceId),
-  ]);
+  const [likeCount, downloadCount, myLike, mySave, rating, downloaded] =
+    await Promise.all([
+      prisma.like.count({ where: { resourceId } }),
+      prisma.transaction.count({ where: { resourceId, type: "SPEND" } }),
+      prisma.like.findUnique({
+        where: { userId_resourceId: { userId, resourceId } },
+      }),
+      prisma.savedResource.findUnique({
+        where: { userId_resourceId: { userId, resourceId } },
+      }),
+      ratingService.getRatingSummary(resourceId, userId),
+      ratingService.hasDownloaded(userId, resourceId),
+    ]);
 
   return {
     id: resource.id,
@@ -160,6 +180,7 @@ async function getResourceDetails(resourceId, userId) {
     like_count: likeCount,
     download_count: downloadCount,
     liked_by_me: !!myLike,
+    saved_by_me: !!mySave,
     rating_average: rating.rating_average,
     rating_count: rating.rating_count,
     my_rating: rating.my_rating,
@@ -202,7 +223,11 @@ async function downloadResource(userId, resourceId) {
 
   // Uploaders download their own file free: no deduction, no ledger row.
   if (!isOwner) {
-    await creditService.deductDownloadCredits(userId, resourceId, DOWNLOAD_COST);
+    await creditService.deductDownloadCredits(
+      userId,
+      resourceId,
+      DOWNLOAD_COST,
+    );
   }
 
   const downloadUrl = await storage.getPresignedGetUrl(resource.objectKey);
@@ -240,7 +265,18 @@ function extensionMatchesType(objectKey, type) {
 
 async function confirmUpload(
   userId,
-  { uploadId, objectKey, title, description, type, category, subject, semester, unit, academicYear },
+  {
+    uploadId,
+    objectKey,
+    title,
+    description,
+    type,
+    category,
+    subject,
+    semester,
+    unit,
+    academicYear,
+  },
 ) {
   const expectedPrefix = `uploads/${userId}/${uploadId}/`;
   if (!objectKey.startsWith(expectedPrefix)) {

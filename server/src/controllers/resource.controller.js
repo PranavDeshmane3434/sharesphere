@@ -2,6 +2,7 @@ const resourceService = require('../services/resource.service');
 const likeService = require('../services/like.service');
 const reportService = require('../services/report.service');
 const ratingService = require('../services/rating.service');
+const savedService = require('../services/saved.service');
 const {
   uploadUrlSchema,
   confirmSchema,
@@ -9,6 +10,9 @@ const {
   ratingSchema,
   listQuerySchema,
 } = require('../validators/resource.validator');
+
+// The saved list only needs paging, so reuse those two fields from the listing schema
+const savedQuerySchema = listQuerySchema.pick({ page: true, limit: true });
 
 async function getUploadUrl(req, res, next) {
   try {
@@ -42,6 +46,25 @@ async function like(req, res, next) {
 async function unlike(req, res, next) {
   try {
     res.json(await likeService.unlikeResource(req.user.id, req.params.id));
+  } catch (err) { next(err); }
+}
+
+async function save(req, res, next) {
+  try {
+    res.json(await savedService.saveResource(req.user.id, req.params.id));
+  } catch (err) { next(err); }
+}
+
+async function unsave(req, res, next) {
+  try {
+    res.json(await savedService.unsaveResource(req.user.id, req.params.id));
+  } catch (err) { next(err); }
+}
+
+async function listSaved(req, res, next) {
+  try {
+    const query = savedQuerySchema.parse(req.query);
+    res.json(await savedService.listSaved(req.user.id, query));
   } catch (err) { next(err); }
 }
 
@@ -85,6 +108,9 @@ module.exports = {
   downloadResource,
   like,
   unlike,
+  save,
+  unsave,
+  listSaved,
   report,
   rate,
   listResources,

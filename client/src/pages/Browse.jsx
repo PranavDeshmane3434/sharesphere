@@ -91,8 +91,7 @@ export default function Browse() {
       setTotal(data.total);
     } catch (err) {
       setError(
-        err.response?.data?.error?.message ||
-          "Failed to load resources",
+        err.response?.data?.error?.message || "Failed to load resources",
       );
     } finally {
       setLoading(false);
@@ -124,9 +123,7 @@ export default function Browse() {
     setDownloadingId(resourceId);
 
     try {
-      const { data } = await api.post(
-        `/resources/${resourceId}/download`,
-      );
+      const { data } = await api.post(`/resources/${resourceId}/download`);
 
       const fileResponse = await fetch(data.downloadUrl);
 
@@ -150,13 +147,9 @@ export default function Browse() {
       await fetchResources();
     } catch (err) {
       if (err.response?.status === 402) {
-        setDownloadError(
-          "Not enough credits to download this resource.",
-        );
+        setDownloadError("Not enough credits to download this resource.");
       } else if (err.response?.status === 404) {
-        setDownloadError(
-          "This resource is no longer available.",
-        );
+        setDownloadError("This resource is no longer available.");
       } else {
         setDownloadError(
           err.response?.data?.error?.message ||
@@ -181,9 +174,21 @@ export default function Browse() {
 
       await fetchResources();
     } catch (err) {
-      setActionError(
-        err.response?.data?.error?.message || "Action failed",
-      );
+      setActionError(err.response?.data?.error?.message || "Action failed");
+    }
+  }
+
+  async function handleToggleSave(resource) {
+    setActionError("");
+    try {
+      if (resource.saved_by_me) {
+        await api.delete(`/resources/${resource.id}/save`);
+      } else {
+        await api.put(`/resources/${resource.id}/save`);
+      }
+      await fetchResources();
+    } catch (err) {
+      setActionError(err.response?.data?.error?.message || "Action failed");
     }
   }
 
@@ -202,9 +207,7 @@ export default function Browse() {
       if (err.response?.status === 409) {
         setActionError("You already reported this resource.");
       } else {
-        setActionError(
-          err.response?.data?.error?.message || "Report failed",
-        );
+        setActionError(err.response?.data?.error?.message || "Report failed");
       }
     }
   }
@@ -217,9 +220,7 @@ export default function Browse() {
         <h2 style={{ margin: 0 }}>Browse resources</h2>
 
         {user && user.role !== "ADMIN" && (
-          <span className="credit-badge">
-            {user.credits} credits
-          </span>
+          <span className="credit-badge">{user.credits} credits</span>
         )}
       </div>
 
@@ -323,11 +324,7 @@ export default function Browse() {
 
       <div className="filter-actions">
         {anyFilterActive && (
-          <button
-            type="button"
-            className="btn-text"
-            onClick={clearFilters}
-          >
+          <button type="button" className="btn-text" onClick={clearFilters}>
             Clear filters
           </button>
         )}
@@ -356,9 +353,7 @@ export default function Browse() {
 
       {loading && <p className="loading-text">Loading...</p>}
       {error && <p className="error-text">{error}</p>}
-      {downloadError && (
-        <p className="error-text">{downloadError}</p>
-      )}
+      {downloadError && <p className="error-text">{downloadError}</p>}
       {actionError && <p className="error-text">{actionError}</p>}
 
       {!loading && resources.length === 0 && (
@@ -390,26 +385,23 @@ export default function Browse() {
           return (
             <li className="item-row" key={r.id}>
               <div className="item-title-row">
-                <Link
-                  to={`/resources/${r.id}`}
-                  className="item-title-link"
-                >
+                <Link to={`/resources/${r.id}`} className="item-title-link">
                   {r.title}
                 </Link>
-
-                <Link
-                  to={`/resources/${r.id}`}
-                  className="view-link"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                >
-                  View details
-                </Link>
+                <div className="title-actions">
+                  <Link
+                    to={`/resources/${r.id}`}
+                    className="view-link"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    View details
+                  </Link>
+                  
+                </div>
               </div>
 
-              {academicLine && (
-                <p className="item-meta">{academicLine}</p>
-              )}
+              {academicLine && <p className="item-meta">{academicLine}</p>}
 
               <p className="item-meta">{fileLine}</p>
 
@@ -432,9 +424,7 @@ export default function Browse() {
                 )}
               </p>
 
-              {r.description && (
-                <p className="item-desc">{r.description}</p>
-              )}
+              {r.description && <p className="item-desc">{r.description}</p>}
 
               {r.is_mine ? (
                 <>
@@ -456,13 +446,17 @@ export default function Browse() {
               ) : (
                 <>
                   <div className="item-actions">
-                    <button
-                      className="btn"
-                      onClick={() => handleToggleLike(r)}
-                    >
+                    <button className="btn" onClick={() => handleToggleLike(r)}>
                       {r.liked_by_me ? "♥" : "♡"} {r.like_count}
                     </button>
-
+                    <button
+                      type="button"
+                      className={`btn save-btn${r.saved_by_me ? " is-saved" : ""}`}
+                      aria-pressed={Boolean(r.saved_by_me)}
+                      onClick={() => handleToggleSave(r)}
+                    >
+                      {r.saved_by_me ? "Saved ✓" : "Save"}
+                    </button>
                     {reportingId !== r.id && (
                       <button
                         className="btn"
@@ -495,9 +489,7 @@ export default function Browse() {
                         type="text"
                         placeholder="Reason (min 5 characters)"
                         value={reportReason}
-                        onChange={(e) =>
-                          setReportReason(e.target.value)
-                        }
+                        onChange={(e) => setReportReason(e.target.value)}
                       />
 
                       <button

@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { Link } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import ResourceDetails from "./pages/ResourceDetails";
+import Saved from "./pages/Saved";
 
 function Home() {
   const { user } = useAuth();
@@ -73,6 +74,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Browse />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/saved"
+              element={
+                <ProtectedRoute>
+                  <Saved />
                 </ProtectedRoute>
               }
             />
